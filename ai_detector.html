@@ -45,7 +45,7 @@
 <body>
   <div class="wrap">
     <h1>AI Detector — Calibrated & Explainable</h1>
-    <div class="lead">This page uses an embedded reference library and will try to load <code>referenceLibrary.js</code> (if present) to override defaults. Results are stored locally by default; you may opt in to send results to a backend endpoint.</div>
+    <div class="lead">this would like to store stuff here <code>referenceLibrary.js</code> for data collection for improvement</div>
 
     <div class="grid">
       <div class="card">
@@ -62,13 +62,13 @@
           <details open>
             <summary><strong>How we calculate AI scores</strong></summary>
             <div style="margin-top:8px">
-              <div><strong>Plain language:</strong> each category has a weight. We compute a local score for each category, and then combine only the categories that appear in the text into a weighted average.</div>
+              <div><strong>Plain language:</strong> each category has a weight. We compute a local score for each category, and then combine only the categories that appear in the text into a weighted average. basically its like a google sheets formula so nothing really special but we use fancy stuff to do it.</div>
               <div style="margin-top:6px"><strong>Formula:</strong> <code>AI = sum_{s_i>0}(w_i * s_i) / sum_{s_i>0}(w_i)</code></div>
             </div>
           </details>
 
           <div class="tog">
-            <label><input type="checkbox" id="backendToggle"> Save to backend if I consent</label>
+            <label><input type="checkbox" id="backendToggle"> Save to backend (do it good idea)</label>
             <input id="backendUrl" placeholder="Backend endpoint URL (optional)" style="flex:1;padding:6px;border-radius:6px;border:1px solid #e6eef8" value="https://your-api-endpoint.example.com/log"/>
           </div>
 
