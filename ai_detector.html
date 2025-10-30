@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>AI Detector — Calibrated, Explainable, Audit-Logged</title>
+<title>AI Detector — Calibrated & Explainable</title>
 <style>
   :root{
     --bg:#f6f7fb; --card:#ffffff; --accent:#1e40af; --muted:#6b7280;
@@ -45,7 +45,7 @@
 <body>
   <div class="wrap">
     <h1>AI Detector — Calibrated & Explainable</h1>
-    <div class="lead">This page uses an embedded reference library and an optional external `referenceLibrary.js` for calibration. Results are stored locally by default; you may opt in to send results to a backend endpoint.</div>
+    <div class="lead">This page uses an embedded reference library and will try to load <code>referenceLibrary.js</code> (if present) to override defaults. Results are stored locally by default; you may opt in to send results to a backend endpoint.</div>
 
     <div class="grid">
       <div class="card">
@@ -62,8 +62,8 @@
           <details open>
             <summary><strong>How we calculate AI scores</strong></summary>
             <div style="margin-top:8px">
-              <div><strong>Plain language:</strong> each category has a weight. We compute a local score for each category, and then combine only the categories that appear in the text into a weighted average. This prevents categories that don't apply from diluting the result.</div>
-              <div style="margin-top:6px"><strong>Formula:</strong> <code>AI = sum_{s_i > 0}(w_i * s_i) / sum_{s_i > 0}(w_i)</code></div>
+              <div><strong>Plain language:</strong> each category has a weight. We compute a local score for each category, and then combine only the categories that appear in the text into a weighted average.</div>
+              <div style="margin-top:6px"><strong>Formula:</strong> <code>AI = sum_{s_i>0}(w_i * s_i) / sum_{s_i>0}(w_i)</code></div>
             </div>
           </details>
 
@@ -129,14 +129,12 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <script>
-/* ai_detector.html
-   - Attempts to load referenceLibrary.js (which should define window.REFERENCE_LIBRARY).
-   - Falls back to embedded defaults if not present.
-   - Stores logs in localStorage key 'ai_detector_log'.
-   - Offers backend POST if user consents.
+/* Robust AI detector front-end.
+   - Tries to load referenceLibrary.js if present (via dynamic script tag) and falls back to embedded defaults on timeout.
+   - Fixed duplicate functions, consistent variable names, and cleaned logic.
 */
 
-// ---------- Embedded fallback reference library (used if external file not present) ----------
+// ---------- Embedded fallback reference library ----------
 const FALLBACK_REFERENCE = {
   baseWeights: {
     emDash: 1.7, promo: 1.6, symbolism: 1.5, weasel: 1.3, templating: 1.4,
@@ -158,71 +156,97 @@ const FALLBACK_REFERENCE = {
   note: "Fallback embedded calibration. Optional external referenceLibrary.js can override this."
 };
 
-// Try to load external referenceLibrary.js by looking for window.REFERENCE_LIBRARY
-// (If the file is present and loaded, it will define window.REFERENCE_LIBRARY before this script runs.)
-// To allow the external file to be loaded, you can include a <script src="referenceLibrary.js"></script> tag in your page.
-// For GitHub Pages, place referenceLibrary.js in the same folder as ai_detector.html.
-const REFERENCE = window.REFERENCE_LIBRARY || FALLBACK_REFERENCE;
+let REFERENCE = FALLBACK_REFERENCE; // will be replaced if external loaded
 
-// ---------- RULES: regex patterns and labels (same ids as REFERENCE.baseWeights keys where relevant) ----------
+// Attempt to load external referenceLibrary.js (non-blocking, but wait up to timeout)
+function loadReferenceLibrary(timeoutMs = 600) {
+  return new Promise((resolve) => {
+    if (window.REFERENCE_LIBRARY) {
+      REFERENCE = window.REFERENCE_LIBRARY;
+      resolve(true);
+      return;
+    }
+    // Try to inject a script tag — user may have dropped referenceLibrary.js in same folder
+    const script = document.createElement('script');
+    script.src = './referenceLibrary.js';
+    script.async = true;
+    let settled = false;
+    script.onload = () => {
+      if (window.REFERENCE_LIBRARY) REFERENCE = window.REFERENCE_LIBRARY;
+      settled = true;
+      resolve(true);
+    };
+    script.onerror = () => {
+      settled = true;
+      resolve(false);
+    };
+    document.head.appendChild(script);
+    // timeout fallback
+    setTimeout(() => {
+      if (!settled) resolve(false);
+    }, timeoutMs);
+  });
+}
+
+// ---------- RULES ----------
 const RULES = [
-  { id:'emDash', label:'Em-dash overuse', weightKey:'emDash',
-    patterns:["—{1,}"], strongIf:1,
+  { id:'emDash', label:'Em-dash overuse', weightKey:'emDash', patterns:["—{1,}"], strongIf:1,
     description:"Frequent em dashes indicate long, clause-heavy sentences and clause-chaining typical of many generated essays; this is a high-reliability signal." },
+
   { id:'promo', label:'Promotional / grandeur language', weightKey:'promo',
     patterns:["\\b(revolutionary|groundbreaking|stunning|thriving|boasts a|rich tapestry|remarkable journeys?)\\b","\\b(remarkable|extraordinary|unprecedented|profoundly)\\b"],
     strongIf:1, description:"Generalized hyperbole and promotional adjectives that replace specific detail." },
-  { id:'symbolism', label:'Symbolic / "serves as" phrasing', weightKey:'symbolism',
-    patterns:["\\b(serves as a testament|serves as a reminder|stands as a testament|stands as)\\b"], strongIf:1,
+
+  { id:'symbolism', label:'Symbolic / "serves as" phrasing', weightKey:'symbolism', patterns:["\\b(serves as a testament|serves as a reminder|stands as a testament|stands as)\\b"], strongIf:1,
     description:"Excessive symbolism and rhetorical signposting." },
-  { id:'weasel', label:'Vague attributions / weasel words', weightKey:'weasel',
-    patterns:["\\b(experts say|some critics argue|observers have noted|studies suggest|research indicates|it is argued|observers note)\\b"], strongIf:1,
+
+  { id:'weasel', label:'Vague attributions / weasel words', weightKey:'weasel', patterns:["\\b(experts say|some critics argue|observers have noted|studies suggest|research indicates|it is argued|observers note)\\b"], strongIf:1,
     description:"Attributions without concrete sources." },
-  { id:'templating', label:'Template placeholders', weightKey:'templating',
-    patterns:["\\[.*?\\]","\\{\\{.*?\\}\\}","Enter\\s+\\w+"], strongIf:1,
+
+  { id:'templating', label:'Template placeholders', weightKey:'templating', patterns:["\\[.*?\\]","\\{\\{.*?\\}\\}","Enter\\s+\\w+"], strongIf:1,
     description:"Leftover template tokens or bracketed placeholders." },
-  { id:'disclaimer', label:'Didactic disclaimers / model-style phrases', weightKey:'disclaimer',
-    patterns:["as an AI language model","as a large language model","I\\'?m sorry,? I can\\'?t"], strongIf:1,
+
+  { id:'disclaimer', label:'Didactic disclaimers / model-style phrases', weightKey:'disclaimer', patterns:["as an AI language model","as a large language model","I\\'?m sorry,? I can\\'?t"], strongIf:1,
     description:"Model-style meta statements or disclaimers." },
-  { id:'genericSummary', label:'Formulaic conclusions or summaries', weightKey:'genericSummary',
-    patterns:["\\b(in conclusion|in summary|to summarize|ultimately|what was once)\\b"], strongIf:1,
+
+  { id:'genericSummary', label:'Formulaic conclusions or summaries', weightKey:'genericSummary', patterns:["\\b(in conclusion|in summary|to summarize|ultimately|what was once)\\b"], strongIf:1,
     description:"Section endings and formulaic summary phrasing." },
-  { id:'phenomenon', label:'Sweeping cause-effect phrasing', weightKey:'phenomenon',
-    patterns:["\\b(is profoundly altering|is reshaping|is reshaping the availability|profoundly altering)\\b"], strongIf:1,
+
+  { id:'phenomenon', label:'Sweeping cause-effect phrasing', weightKey:'phenomenon', patterns:["\\b(is profoundly altering|is reshaping|is reshaping the availability|profoundly altering)\\b"], strongIf:1,
     description:"Broad-scope claims and sweeping causal language." },
-  { id:'weirdQuotes', label:'Smart/curly quotes', weightKey:'weirdQuotes',
-    patterns:["[\\u201c\\u201d\\u2018\\u2019]"], strongIf:2,
+
+  { id:'weirdQuotes', label:'Smart/curly quotes', weightKey:'weirdQuotes', patterns:["[\\u201c\\u201d\\u2018\\u2019]"], strongIf:2,
     description:"Smart quotes and typographic artifacts from formatted output." },
-  { id:'longLists', label:'Rule-of-three / triads', weightKey:'longLists',
-    patterns:["\\b(\\w+[, ]+\\w+[, ]+and\\s+\\w+)\\b"], strongIf:3,
+
+  { id:'longLists', label:'Rule-of-three / triads', weightKey:'longLists', patterns:["\\b(\\w+[, ]+\\w+[, ]+and\\s+\\w+)\\b"], strongIf:3,
     description:"'A, B, and C' list constructions common in polished generated prose." },
-  { id:'hedging', label:'Hedging words', weightKey:'hedging',
-    patterns:["\\b(may|might|could|likely|approximately|arguably)\\b"], strongIf:2,
+
+  { id:'hedging', label:'Hedging words', weightKey:'hedging', patterns:["\\b(may|might|could|likely|approximately|arguably)\\b"], strongIf:2,
     description:"Excessive hedging and approximations." },
-  { id:'citationTokens', label:'Citation-like tokens / placeholders', weightKey:'citationTokens',
-    patterns:["doi=10\\.", "pmid=\\d{1,7}", "access-date=\\d{4}-xx-xx", "2025-xx-xx"], strongIf:1,
+
+  { id:'citationTokens', label:'Citation-like tokens / placeholders', weightKey:'citationTokens', patterns:["doi=10\\.", "pmid=\\d{1,7}", "access-date=\\d{4}-xx-xx", "2025-xx-xx"], strongIf:1,
     description:"Citation tokens and placeholder dates." },
-  { id:'sectionCase', label:'Title-case section headings', weightKey:'sectionCase',
-    patterns:["\\b([A-Z][a-z]+(?:\\s+[A-Z][a-z]+){1,5})\\b"], strongIf:3,
+
+  { id:'sectionCase', label:'Title-case section headings', weightKey:'sectionCase', patterns:["\\b([A-Z][a-z]+(?:\\s+[A-Z][a-z]+){1,5})\\b"], strongIf:3,
     description:"Title-case sequences that may indicate auto-generated headings." },
-  { id:'emphasisSignposting', label:'Signposting / didactic phrases', weightKey:'emphasisSignposting',
-    patterns:["\\b(it is important to note|it is crucial to note|importantly|it is worth noting)\\b"], strongIf:1,
+
+  { id:'emphasisSignposting', label:'Signposting / didactic phrases', weightKey:'emphasisSignposting', patterns:["\\b(it is important to note|it is crucial to note|importantly|it is worth noting)\\b"], strongIf:1,
     description:"Didactic signposting." },
-  { id:'technicalPhrases', label:'Scientific-sounding terms', weightKey:'technicalPhrases',
-    patterns:["\\b(phenological mismatch|photoperiod|breeding grounds|migration timing|stopover points)\\b"], strongIf:1,
+
+  { id:'technicalPhrases', label:'Scientific-sounding terms', weightKey:'technicalPhrases', patterns:["\\b(phenological mismatch|photoperiod|breeding grounds|migration timing|stopover points)\\b"], strongIf:1,
     description:"Scientific terminology that may be used generically." },
-  { id:'conjunctiveIng', label:'-ing connectors / present participles', weightKey:'conjunctiveIng',
-    patterns:["\\b(ensuring|highlighting|underscoring|contributing to|resulting in|leading to)\\b"], strongIf:2,
+
+  { id:'conjunctiveIng', label:'-ing connectors / present participles', weightKey:'conjunctiveIng', patterns:["\\b(ensuring|highlighting|underscoring|contributing to|resulting in|leading to)\\b"], strongIf:2,
     description:"Frequent '-ing' connector phrases." },
-  { id:'overcitation', label:'Neat parenthetical species/examples', weightKey:'overcitation',
-    patterns:["\\b\\(Ficedula hypoleuca\\)|\\b\\(Tachycineta bicolor\\)|\\b\\(Turdus migratorius\\)","\\b(e\\.g\\.|for example|such as the)\\b"], strongIf:1,
+
+  { id:'overcitation', label:'Neat parenthetical species/examples', weightKey:'overcitation', patterns:["\\b\\(Ficedula hypoleuca\\)|\\b\\(Tachycineta bicolor\\)|\\b\\(Turdus migratorius\\)","\\b(e\\.g\\.|for example|such as the)\\b"], strongIf:1,
     description:"Precise parenthetical examples without explicit sourcing." },
-  { id:'lists', label:'Inline list headers', weightKey:'lists',
-    patterns:["^\\d+\\.\\s+[^\\n]+:\\s","^\\-\\s+[^\\n]+:\\s","^•\\s+[^\\n]+:\\s"], strongIf:1,
+
+  { id:'lists', label:'Inline list headers', weightKey:'lists', patterns:["^\\d+\\.\\s+[^\\n]+:\\s","^\\-\\s+[^\\n]+:\\s","^•\\s+[^\\n]+:\\s"], strongIf:1,
     description:"Header-like list items." }
 ];
 
-// Pre-compile regexes with global + multiline + case-insensitive
+// compile regexes
 RULES.forEach(r => {
   r.re = r.patterns.map(p => {
     try { return new RegExp(p, 'gmi'); }
@@ -230,7 +254,7 @@ RULES.forEach(r => {
   });
 });
 
-// ---------- UI elements ----------
+// ---------- UI references ----------
 const inputEl = document.getElementById('inputText');
 const analyzeBtn = document.getElementById('analyzeBtn');
 const clearBtn = document.getElementById('clearBtn');
@@ -302,32 +326,19 @@ Ultimately, the story of migrating birds is also the story of the planet itself:
 function escapeHtml(s){ if(!s) return ''; return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
 function escapeRegExp(s){ return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
-// ---------- main analyze function ----------
-analyzeBtn.addEventListener('click', analyze);
-clearBtn.addEventListener('click', ()=>{ inputEl.value=''; clearDisplay(); });
-downloadLogBtn.addEventListener('click', downloadLog);
-clearLocalBtn.addEventListener('click', clearLocalLog);
-exportPdfBtn.addEventListener('click', exportPDF);
+// ---------- local log key ----------
+const LOG_KEY = 'ai_detector_log_v1';
 
-function clearDisplay(){
-  renderedText.innerHTML=''; barsWrap.innerHTML=''; overallPctEl.textContent='0%';
-  gaugeArc.style.strokeDashoffset = 290;
-  summaryHeadline.textContent='No analysis yet';
-  summaryText.textContent='Click Analyze to get results.';
-  diagWrap.innerHTML='';
-  rulesList.innerHTML = buildRulesList(); // show weights
-}
-
-function buildRulesList(){
-  // show effective weights (calibrated) and base weights
-  const base = REFERENCE.baseWeights;
-  const stats = REFERENCE.stats;
+// ---------- helper: build rules list (show effective weights) ----------
+function buildRulesList() {
+  const base = (REFERENCE && REFERENCE.baseWeights) ? REFERENCE.baseWeights : {};
+  const stats = (REFERENCE && REFERENCE.stats) ? REFERENCE.stats : {};
   let html = '<div class="small"><strong>Rules & effective weights (calibrated)</strong></div>';
   html += '<div style="font-size:13px;margin-top:8px">';
-  RULES.forEach(r=>{
+  RULES.forEach(r => {
     const key = r.weightKey;
-    const baseW = (REFERENCE.baseWeights && REFERENCE.baseWeights[key]) ? REFERENCE.baseWeights[key] : 1.0;
-    const stat = (REFERENCE.stats && REFERENCE.stats[key]) ? REFERENCE.stats[key] : {aiAvg:1, humanAvg:1};
+    const baseW = base[key] !== undefined ? base[key] : 1.0;
+    const stat = stats[key] || {aiAvg:1, humanAvg:1};
     const eff = Math.round(baseW * (stat.aiAvg / Math.max(1, stat.humanAvg)) * 100)/100;
     html += `<div style="margin-bottom:6px"><strong>${escapeHtml(r.label)}</strong> — base ${baseW} — effective ${eff}</div>`;
   });
@@ -335,28 +346,27 @@ function buildRulesList(){
   return html;
 }
 
-// init rules list
-rulesList.innerHTML = buildRulesList();
-
-// ---------- compute effective weight helper ----------
+// ---------- effective weight function ----------
 function effectiveWeight(key){
-  const baseW = (REFERENCE.baseWeights && REFERENCE.baseWeights[key]) ? REFERENCE.baseWeights[key] : 1.0;
-  const stat = (REFERENCE.stats && REFERENCE.stats[key]) ? REFERENCE.stats[key] : {aiAvg:1, humanAvg:1};
-  const eff = baseW * (stat.aiAvg / Math.max(1, stat.humanAvg));
-  return eff;
+  const baseW = (REFERENCE && REFERENCE.baseWeights && (REFERENCE.baseWeights[key] !== undefined)) ? REFERENCE.baseWeights[key] : 1.0;
+  const stat = (REFERENCE && REFERENCE.stats && REFERENCE.stats[key]) ? REFERENCE.stats[key] : {aiAvg:1, humanAvg:1};
+  return baseW * (stat.aiAvg / Math.max(1, stat.humanAvg));
 }
 
-function analyze(){
+// ---------- log helpers ----------
+function getLocalLog(){ try { const raw = localStorage.getItem(LOG_KEY); return raw ? JSON.parse(raw) : []; } catch(e){ return []; } }
+function appendLocalLog(entry){ try { const arr = getLocalLog(); arr.push(entry); localStorage.setItem(LOG_KEY, JSON.stringify(arr)); } catch(e){ console.warn('Failed to save local log', e); } }
+function clearLocalLogConfirmed(){ if(confirm('Clear local audit log?')){ localStorage.removeItem(LOG_KEY); alert('Local log cleared.'); } }
+function downloadLog(){ const arr = getLocalLog(); const blob = new Blob([JSON.stringify(arr, null, 2)], {type:'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'ai_detector_log.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); }
+
+// ---------- analyze logic ----------
+function analyzeText(){
   const text = inputEl.value || '';
-  if(!text.trim()){
-    alert('Please paste some text to analyze.');
-    return;
-  }
+  if(!text.trim()){ alert('Please paste some text to analyze.'); return; }
 
   // find matches
   const allMatches = [];
-  const counts = {};
-  RULES.forEach(r => counts[r.id] = 0);
+  const counts = {}; RULES.forEach(r => counts[r.id] = 0);
 
   RULES.forEach(r => {
     r.re.forEach(regex => {
@@ -370,7 +380,7 @@ function analyze(){
     });
   });
 
-  // compute local s_i and collect only those with s_i > 0
+  // compute local scores for triggered rules (s_i) and collect only s_i>0
   const perRule = [];
   RULES.forEach(r => {
     const cnt = counts[r.id] || 0;
@@ -381,140 +391,91 @@ function analyze(){
     }
   });
 
-  // compute non-diluting weighted average: only categories with local>0 included
+  // compute weighted average ignoring zero categories
   let weightedSum = 0, weightTotal = 0;
   perRule.forEach(p => { weightedSum += p.local * p.weightEff; weightTotal += p.weightEff; });
   const overallPct = weightTotal ? Math.round(weightedSum / weightTotal) : 0;
 
-  // highlight text (avoid overlaps)
+  // build highlighted HTML avoiding overlapping spans
   allMatches.sort((a,b)=>a.start - b.start || b.end - a.end);
-  let pos = 0; let highlighted = '';
+  let pos = 0, out = '';
   for(let i=0;i<allMatches.length;i++){
     const m = allMatches[i];
     if(m.start < pos) continue;
-    highlighted += escapeHtml(text.slice(pos, m.start));
-    const rule = RULES.find(rr => rr.id === m.ruleId);
-    const countForRule = counts[m.ruleId] || 0;
-    // severity: strong if high effective weight or repeated matches
-    const sev = (countForRule >= (rule.strongIf || 1) * 3 || effectiveWeight(rule.weightKey) >= 1.4) ? 'strong'
-              : (countForRule >= (rule.strongIf || 1) * 2 || effectiveWeight(rule.weightKey) >= 1.1) ? 'med'
-              : '';
+    out += escapeHtml(text.slice(pos, m.start));
+    const ruleDef = RULES.find(rr => rr.id === m.ruleId) || {};
+    const cntForRule = counts[m.ruleId] || 0;
+    const effW = effectiveWeight(ruleDef.weightKey || '');
+    let sev = '';
+    if(cntForRule >= (ruleDef.strongIf || 1) * 3 || effW >= 1.4) sev = 'strong';
+    else if(cntForRule >= (ruleDef.strongIf || 1) * 2 || effW >= 1.1) sev = 'med';
     const cls = `match ${sev}`.trim();
-    const title = `${m.label} — matched phrase: "${m.text.replace(/\\n/g,' ')}"`;
-    highlighted += `<span class="${cls}" title="${escapeHtml(title)}" data-rule="${m.ruleId}">${escapeHtml(m.text)}</span>`;
+    const title = `${m.label} — matched phrase: "${m.text.replace(/\n/g,' ')}"`;
+    out += `<span class="${cls}" title="${escapeHtml(title)}" data-rule="${m.ruleId}">${escapeHtml(m.text)}</span>`;
     pos = m.end;
   }
-  highlighted += escapeHtml(text.slice(pos));
-  renderedText.innerHTML = highlighted || '(no matches)';
+  out += escapeHtml(text.slice(pos));
+  renderedText.innerHTML = out || '(no matches)';
 
-  // render bars (sort perRule by local desc)
+  // render bars
   perRule.sort((a,b)=>b.local - a.local);
   barsWrap.innerHTML = '';
   perRule.forEach(rp => {
-    const bar = document.createElement('div'); bar.className='bar';
-    bar.innerHTML = `<div class="meta">${escapeHtml(rp.label)}</div>
+    const row = document.createElement('div'); row.className = 'bar';
+    row.innerHTML = `<div class="meta">${escapeHtml(rp.label)}</div>
       <div class="meter"><i style="width:${rp.local}%"></i></div>
       <div class="score">${rp.local}%</div>`;
-    barsWrap.appendChild(bar);
+    barsWrap.appendChild(row);
   });
 
-  // update gauge and summary
+  // update gauge & summary
   overallPctEl.textContent = overallPct + '%';
   const dash = 290 - (290 * (overallPct/100));
   gaugeArc.style.strokeDashoffset = dash;
   summaryHeadline.textContent = overallPct >= 70 ? 'Likely AI-generated (heuristic)' : (overallPct >= 35 ? 'Possibly AI-generated' : 'Likely human-written');
   summaryText.textContent = `Overall AI score: ${overallPct}%. Computed using ${perRule.length} triggered category(ies).`;
 
-  // diagnostic cards
+  // diagnostics cards
   diagWrap.innerHTML = '';
   perRule.forEach(rp => {
-    const d = document.createElement('div'); d.className = 'diag default';
-    // special styling for emDash
-    if(rp.id === 'emDash'){
-      d.className = 'diag emdash';
-    }
-    d.innerHTML = `<div style="font-weight:700">${escapeHtml(rp.label)} — ${rp.local}% (${rp.count} matches)</div>
+    const card = document.createElement('div');
+    card.className = (rp.id === 'emDash') ? 'diag emdash' : 'diag default';
+    card.innerHTML = `<div style="font-weight:700">${escapeHtml(rp.label)} — ${rp.local}% (${rp.count} matches)</div>
       <div style="margin-top:8px" class="small">${escapeHtml(rp.desc)}</div>
-      <div style="margin-top:8px;font-size:13px;color:#374151">Effective weight: ${rp.weightEff.toFixed(2)} (base key: ${rp.key})</div>`;
-    diagWrap.appendChild(d);
+      <div style="margin-top:8px;font-size:13px;color:#374151">Effective weight: ${rp.weightEff.toFixed(2)} (key: ${rp.key})</div>`;
+    diagWrap.appendChild(card);
   });
 
-  // store audit log entry (localStorage)
-  const timestamp = new Date().toISOString();
+  // store audit log entry
   const entry = {
-    timestamp,
+    timestamp: new Date().toISOString(),
     overallPct,
     categories: perRule.map(p => ({id:p.id,label:p.label,local:p.local,count:p.count,weightEff:p.weightEff})),
-    snippet: inputEl.value.slice(0, 2000) // store up to first 2000 chars to keep log small
+    snippet: inputEl.value.slice(0, 2000)
   };
   appendLocalLog(entry);
 
-  // optionally POST to backend if user consented
+  // optional backend post (only with explicit consent)
   if(backendToggle.checked){
-    const url = backendUrlInput.value && backendUrlInput.value.trim();
+    const url = (backendUrlInput.value || '').trim();
     if(url){
-      // ask user to confirm sending
-      if(confirm('You have enabled backend save. This will POST the analysis JSON to the configured endpoint. Proceed?')){
-        fetch(url, {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify(entry)
-        }).then(res=>{
-          if(res.ok) alert('Saved to backend (server responded OK).');
-          else alert('Server returned status ' + res.status);
-        }).catch(err=>{
-          alert('Failed to save to backend: ' + (err && err.message ? err.message : err));
-        });
+      if(confirm('You enabled backend save. This will POST the analysis to the configured endpoint. Proceed?')){
+        fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(entry)})
+          .then(res => { if(res.ok) alert('Saved to backend (server responded OK).'); else alert('Server returned status ' + res.status); })
+          .catch(err => { alert('Failed to save to backend: ' + (err && err.message ? err.message : err)); });
       }
-    } else {
-      alert('Please enter a backend URL to send data.');
-    }
+    } else alert('Please provide a backend URL to send data.');
   }
 }
 
-// ---------- local log (localStorage) ----------
-const LOG_KEY = 'ai_detector_log_v1';
-
-function getLocalLog(){
-  try{
-    const raw = localStorage.getItem(LOG_KEY);
-    if(!raw) return [];
-    return JSON.parse(raw);
-  } catch(e){ return []; }
-}
-function appendLocalLog(entry){
-  const arr = getLocalLog();
-  arr.push(entry);
-  try{ localStorage.setItem(LOG_KEY, JSON.stringify(arr)); } catch(e){ console.warn('Failed to save local log', e); }
-}
-function clearLocalLog(){
-  if(confirm('Clear local audit log? This cannot be undone.')){
-    localStorage.removeItem(LOG_KEY);
-    alert('Local log cleared.');
-  }
-}
-function downloadLog(){
-  const arr = getLocalLog();
-  const blob = new Blob([JSON.stringify(arr, null, 2)], {type:'application/json'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'ai_detector_log.json';
-  document.body.appendChild(a); a.click(); a.remove();
-  URL.revokeObjectURL(url);
-}
-
-function clearLocalLog(){
-  if(confirm('Clear local audit log?')){ localStorage.removeItem(LOG_KEY); alert('Local log cleared.'); }
-}
-
-// ---------- PDF export (clean reader-style) ----------
+// ---------- PDF export ----------
 async function exportPDF(){
-  // Build report HTML (simple layout)
   const title = 'ai_detector_report';
   const overall = overallPctEl.textContent || '0%';
   const headline = summaryHeadline.textContent || '';
-  const perRuleHtml = Array.from(document.querySelectorAll('.bar')).map(b => b.innerHTML).join('');
+  const perRuleHtml = Array.from(document.querySelectorAll('.bar')).map(b => b.outerHTML).join('');
   const diagHtml = diagWrap.innerHTML || '';
+  const highlighted = renderedText.innerHTML || escapeHtml(inputEl.value || '');
 
   const reportHtml = `
     <div style="font-family:Arial,Helvetica,sans-serif;padding:24px;color:#101828">
@@ -526,19 +487,17 @@ async function exportPDF(){
       <h3 style="margin-top:12px">Diagnostic explanations</h3>
       <div>${diagHtml}</div>
       <h3 style="margin-top:12px">Highlighted text</h3>
-      <div style="padding:12px;border:1px solid #eef2f6;border-radius:8px;background:#fff;white-space:pre-wrap">${renderedText.innerHTML}</div>
+      <div style="padding:12px;border:1px solid #eef2f6;border-radius:8px;background:#fff;white-space:pre-wrap">${highlighted}</div>
       <div style="margin-top:18px;color:#6b7280;font-size:12px">Generated by heuristic detector. This report is not definitive evidence of AI authorship.</div>
     </div>
   `;
 
-  // open popup
   const popup = window.open('', '_blank', 'width=800,height=1000');
-  if(!popup){ alert('Popup blocked. Please allow popups.'); return; }
+  if(!popup){ alert('Popup blocked. Please allow popups for this site.'); return; }
   popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Report</title></head><body style="margin:0;padding:0;background:#f6f7fb">${reportHtml}</body></html>`);
   await new Promise(res => setTimeout(res, 400));
   try{
-    const docBody = popup.document.body;
-    const canvas = await html2canvas(docBody, {scale:1.4, backgroundColor:null, useCORS:true});
+    const canvas = await html2canvas(popup.document.body, {scale:1.4, backgroundColor:null, useCORS:true});
     const imgData = canvas.toDataURL('image/jpeg', 0.94);
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ unit:'px', format:[canvas.width, canvas.height] });
@@ -551,8 +510,22 @@ async function exportPDF(){
   }
 }
 
-// initialize display
-clearDisplay();
+// ---------- initialization ----------
+async function initApp(){
+  await loadReferenceLibrary(700); // try to load external referenceLibrary.js
+  document.getElementById('rulesList').innerHTML = buildRulesList();
+  // wire up UI events
+  analyzeBtn.addEventListener('click', analyzeText);
+  clearBtn.addEventListener('click', ()=>{ inputEl.value=''; renderedText.innerHTML=''; barsWrap.innerHTML=''; overallPctEl.textContent='0%'; gaugeArc.style.strokeDashoffset = 290; summaryHeadline.textContent='No analysis yet'; summaryText.textContent='Click Analyze to get results.'; diagWrap.innerHTML=''; });
+  downloadLogBtn.addEventListener('click', downloadLog);
+  clearLocalBtn.addEventListener('click', clearLocalLogConfirmed);
+  exportPdfBtn.addEventListener('click', exportPDF);
+  // show initial rules list (weights)
+  document.getElementById('rulesList').innerHTML = buildRulesList();
+}
+
+// start
+initApp();
 
 </script>
 </body>
