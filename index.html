@@ -3,241 +3,201 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>AI/ Human chunked detector — hover-overlay mode</title>
+<title>AI vs Human Detector — Calibrated & Explainable</title>
 <style>
   :root{
-    --bg:#f6f8fb; --card:#ffffff; --accent:#1e40af; --muted:#475569;
-    --ai:#ef4444; --human:#10b981; --amb:#f59e0b;
-    --tooltip-bg:#ffffff; --tooltip-border:#c7d2fe;
-    --highlight-weak:#fff8dc; --highlight-med:#ffeed8; --highlight-strong:#ffe5ec;
+    --bg:#f6f7fb; --card:#ffffff; --accent:#1e40af; --muted:#6b7280;
+    --weak:#fffbe6; --med:#fff0e6; --strong:#ffeef4; --danger:#cc0000;
+    --human:#ecfdf5;
   }
-  body{font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial; margin:0; background:var(--bg); color:#0b1220;}
-  .wrap{max-width:1100px; margin:24px auto; padding:18px;}
+  body{font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial; margin:0; background:var(--bg); color:#0b1230;}
+  .wrap{max-width:1180px; margin:26px auto; padding:20px;}
   h1{margin:0 0 6px; font-size:20px;}
-  .lead{color:var(--muted); margin:6px 0 14px;}
-  .grid{display:grid; grid-template-columns:1fr 420px; gap:16px;}
-  .card{background:var(--card); border-radius:10px; padding:14px; box-shadow:0 6px 20px rgba(13,30,60,0.06);}
-  textarea{width:100%; min-height:200px; padding:10px; border-radius:8px; border:1px solid #e6eef8; font-size:14px; line-height:1.6; resize:vertical;}
+  .lead{color:var(--muted); margin:8px 0 18px;}
+  .grid{display:grid; grid-template-columns:1fr 420px; gap:18px;}
+  .card{background:var(--card); border-radius:10px; padding:14px; box-shadow:0 8px 26px rgba(13,30,60,0.06);}
+  textarea{width:100%; min-height:420px; padding:12px; border-radius:8px; border:1px solid #e6eef8; font-size:14px; line-height:1.6; resize:vertical; background:transparent;}
   .controls{display:flex; gap:8px; align-items:center; margin-bottom:10px;}
   button{background:var(--accent); color:#fff; border:0; padding:8px 12px; border-radius:8px; cursor:pointer;}
   button.secondary{background:#eef2ff; color:var(--accent); border:1px solid #dbeafe;}
   .small{font-size:13px;color:var(--muted);}
-  .chunks{margin-top:12px;}
-  .chunk-container{position:relative; margin-bottom:12px; transition:transform .15s ease;}
-  .chunk{padding:10px;border-radius:8px; background:transparent; line-height:1.6; cursor:text;}
-  .chunk.ai-strong{background:linear-gradient(90deg, rgba(239,68,68,0.06), rgba(239,68,68,0.02));}
-  .chunk.human-strong{background:linear-gradient(90deg, rgba(16,185,129,0.06), rgba(16,185,129,0.02));}
-  .chunk.ambig{background:linear-gradient(90deg, rgba(245,158,11,0.04), rgba(245,158,11,0.01));}
-  .label-gap{height:0; transition:height .15s ease;}
-  .label-above{
-    position:relative;
-    display:block;
-    margin-bottom:6px;
-    pointer-events:none;
-    opacity:0;
-    transform:translateY(-6px);
-    transition:opacity .12s ease, transform .12s ease;
-    font-size:13px;
-  }
-  .label-pill{
-    display:inline-block;
-    padding:6px 10px;
-    border-radius:999px;
-    background:var(--tooltip-bg);
-    border:1px solid var(--tooltip-border);
-    box-shadow:0 6px 18px rgba(15,23,42,0.06);
-    pointer-events:auto;
-  }
-  .label-pill .score{font-weight:700; margin-right:8px;}
-  .signals{display:inline-block; margin-left:8px; color:var(--muted); font-size:12px;}
-  /* tooltip bubble shown above */
-  .tooltip{
-    position:absolute;
-    left:8px;
-    top:-44px;
-    min-width:220px;
-    max-width:640px;
-    background:#fff;
-    border:1px solid #e6eef8;
-    border-radius:8px;
-    padding:10px;
-    box-shadow:0 10px 30px rgba(2,6,23,0.08);
-    opacity:0;
-    transform:translateY(-6px);
-    transition:opacity .12s ease, transform .12s ease;
-    z-index:30;
-    font-size:13px;
-    pointer-events:none;
-  }
-  .tooltip .title{font-weight:700; margin-bottom:6px;}
-  .tooltip .evidence{color:var(--muted); font-size:12px;}
-  .chunk-container:hover .tooltip{opacity:1; transform:translateY(0); pointer-events:auto;}
-  .chunk-container:hover .label-above{opacity:1; transform:translateY(0);}
-  /* pointer cursor for labelled text spans */
-  .match{cursor:pointer;}
-  /* right column styles */
   .gauge{display:flex; align-items:center; gap:12px;}
-  .bars{margin-top:12px;}
+  .bars{margin-top:10px;}
   .bar{display:flex; gap:10px; align-items:center; margin:8px 0;}
   .bar .meta{width:170px; font-size:13px; color:var(--muted);}
-  .bar .meter{flex:1; height:10px; background:#f1f5f9; border-radius:999px; overflow:hidden;}
+  .bar .meter{flex:1; height:12px; background:#f1f5f9; border-radius:999px; overflow:hidden;}
   .bar .meter > i{display:block; height:100%; background:linear-gradient(90deg,var(--accent),#60a5fa); width:0%;}
   .bar .score{width:44px; text-align:right; font-weight:700;}
-  .modes{display:flex; gap:8px; margin-top:8px; align-items:center;}
-  .mode-btn{padding:6px 10px; border-radius:8px; border:1px solid #e6eef8; background:#fff; cursor:pointer;}
-  .mode-btn.active{border-color:var(--accent); box-shadow:0 6px 18px rgba(30,64,175,0.06);}
+  .highlights{margin-top:12px; padding:12px; border-radius:8px; border:1px dashed #e6eef8; background:#fff;}
+  /* highlight style B - color + thin underline */
+  .match{background:transparent; padding:0 2px; text-decoration:underline; text-decoration-style:dashed; text-decoration-thickness:1px; text-underline-offset:4px; cursor:pointer;}
+  .match.ai{background:linear-gradient(90deg, rgba(255,244,200,0.6), rgba(255,244,200,0.2));}
+  .match.med{background:linear-gradient(90deg, rgba(255,225,200,0.6), rgba(255,225,200,0.2));}
+  .match.strong{background:linear-gradient(90deg, rgba(255,230,240,0.6), rgba(255,230,240,0.2));}
+  .match.human{background:linear-gradient(90deg, rgba(220,255,235,0.6), rgba(220,255,235,0.2)); text-decoration-color: #059669;}
+  .explain{font-size:13px;color:var(--muted); margin-top:8px;}
+  .diag{padding:12px;border-radius:8px;margin-top:10px}
+  .diag.emdash{background:#ffecef;border:2px solid var(--danger); box-shadow:0 6px 18px rgba(204,0,0,0.06)}
+  .diag.ai{background:#fff7e6;border:1px solid #ffd08a}
+  .diag.human{background:var(--human);border:1px solid #8ef1be}
   .footer{margin-top:12px; font-size:13px; color:var(--muted);}
-  @media (max-width:980px){ .grid{grid-template-columns:1fr} .tooltip{left:0; right:0;} }
+  .inspector{border-left:1px solid #eef2f6; padding-left:12px;}
+  .rule-row{padding:8px;border-radius:6px;margin-bottom:8px;background:#fff}
+  .rule-row:hover{box-shadow:0 6px 18px rgba(13,30,60,0.06)}
+  .meta-row{font-size:13px;color:var(--muted);margin-top:6px}
+  @media (max-width:980px){ .grid{grid-template-columns:1fr} .gauge{margin-top:12px} .inspector{border-left:none;padding-left:0} }
 </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>AI & Human chunk detector — Hover overlay mode</h1>
-    <div class="lead">Chunks (paragraphs) are analyzed independently. Hover a paragraph — the line above will move up to show the scores and top signals.</div>
+    <h1>AI vs Human Detector — Explainable & Calibrated</h1>
+    <div class="lead">This page calculates both AI and Human signals and shows a relative AI likelihood. Hover highlighted phrases to see the match details in the Match Inspector (right panel). No browser tooltip flicker — inspector is stable.</div>
 
     <div class="grid">
       <div class="card">
         <div class="controls">
           <button id="analyzeBtn">Analyze</button>
           <button class="secondary" id="clearBtn">Clear</button>
-          <button class="secondary" id="downloadLogBtn">Download Log</button>
+          <button id="downloadLogBtn" class="secondary">Download Log</button>
           <button id="exportPdfBtn" style="margin-left:auto;background:#0ea5a4">Export PDF</button>
         </div>
 
-        <textarea id="inputText" placeholder="Paste your text here..."></textarea>
+        <textarea id="inputText" placeholder="Paste the text you want to analyze..."></textarea>
 
-        <div style="margin-top:10px" class="small">Chunking: paragraph-level. Toggle chunk granularity is planned. Hover a paragraph to inspect its label.</div>
+        <div class="explain">
+          <details open>
+            <summary><strong>How scores are computed</strong></summary>
+            <div style="margin-top:8px">
+              <div><strong>Plain:</strong> we compute an AI signal score and a Human signal score (separate rule sets). The final AI likelihood is AI / (AI + Human). Only categories that appear (nonzero) are used, so missing categories don't dilute the result.</div>
+              <div style="margin-top:6px"><strong>Formula:</strong> <code>AI_likelihood = AI_total / (AI_total + Human_total)</code></div>
+            </div>
+          </details>
+          <div style="margin-top:8px">
+            <label><input type="checkbox" id="backendToggle"> Save to backend if I consent</label>
+            <input id="backendUrl" placeholder="Backend endpoint URL (optional)" style="flex:1;padding:6px;border-radius:6px;border:1px solid #e6eef8;margin-left:8px" value="https://your-api-endpoint.example.com/log"/>
+          </div>
+          <div style="margin-top:8px" class="small">Results stored locally by default; click Download Log to export all stored analyses.</div>
+        </div>
 
-        <div class="chunks" id="chunksContainer" aria-live="polite" style="margin-top:12px;"></div>
+        <div class="highlights" aria-live="polite">
+          <div style="font-weight:700;margin-bottom:8px">Highlighted text (click or hover fragments to inspect)</div>
+          <div id="renderedText" style="white-space:pre-wrap; font-size:15px; line-height:1.6;"></div>
+        </div>
       </div>
 
-      <div class="card">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <div style="font-weight:700">Config & Summary</div>
-          <div class="small">Mode + calibration</div>
+      <div class="card inspector">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-weight:700">Match Inspector & Results</div>
+          <div class="small">AI vs Human (relative)</div>
         </div>
 
-        <div class="modes" style="margin-top:12px;">
-          <div class="mode-btn active" data-mode="default">Default</div>
-          <div class="mode-btn" data-mode="scholarly">Scholarly</div>
-          <div class="mode-btn" data-mode="creative">Creative</div>
-        </div>
-
-        <div style="margin-top:12px">
-          <label><input type="checkbox" id="backendToggle"> Save to backend if I consent</label>
-          <input id="backendUrl" placeholder="Backend endpoint (optional)" style="width:100%;margin-top:8px;padding:6px;border-radius:6px;border:1px solid #e6eef8" value="https://your-api-endpoint.example.com/log"/>
-        </div>
-
-        <div style="margin-top:12px">
+        <div style="margin-top:10px; display:flex; gap:12px; align-items:center;">
           <div class="gauge">
-            <svg width="90" height="90" viewBox="0 0 120 120">
+            <svg width="110" height="110" viewBox="0 0 120 120">
+              <defs><linearGradient id="g1" x1="0%" x2="100%"><stop offset="0%" stop-color="#1e40af"/><stop offset="100%" stop-color="#60a5fa"/></linearGradient></defs>
               <circle cx="60" cy="60" r="46" stroke="#eef2f6" stroke-width="14" fill="none"></circle>
               <circle id="gaugeArc" cx="60" cy="60" r="46" stroke="url(#g1)" stroke-width="14" stroke-linecap="round" stroke-dasharray="290" stroke-dashoffset="290" fill="none"></circle>
-              <defs><linearGradient id="g1" x1="0%" x2="100%"><stop offset="0%" stop-color="#1e40af"/><stop offset="100%" stop-color="#60a5fa"/></linearGradient></defs>
             </svg>
-            <div style="display:flex; flex-direction:column;">
-              <div id="overallPct" style="font-weight:800;font-size:18px">0%</div>
-              <div class="small">Avg AI (triggered chunks)</div>
+            <div style="display:flex;flex-direction:column;align-items:center;">
+              <div id="overallPct" style="font-weight:800;font-size:20px">0%</div>
+              <div class="small" id="verdictText">No analysis yet</div>
             </div>
+          </div>
+
+          <div style="flex:1">
+            <div id="summaryHeadline" style="font-weight:700">No analysis yet</div>
+            <div id="summaryText" class="small">Run analysis to see AI vs Human signals.</div>
+            <div id="weightsList" style="margin-top:10px; max-height:220px; overflow:auto;" class="small"></div>
           </div>
         </div>
 
-        <div id="summaryText" class="small" style="margin-top:8px">No analysis yet.</div>
+        <div class="bars" id="barsWrap"></div>
 
-        <div class="bars" id="barsWrap" style="margin-top:12px"></div>
+        <div style="margin-top:12px; font-weight:700">Inspector</div>
+        <div id="inspectorPane" style="margin-top:8px; max-height:300px; overflow:auto;">
+          <div class="small">Hover a highlighted span in the text to view match details here. Click a match to pin it.</div>
+        </div>
 
-        <div class="footer">Chunks with strong human signals show green; AI-leaning chunks show red. Hover to inspect evidence. Data is stored locally unless you consent to backend save.</div>
+        <div id="diagWrap"></div>
+
+        <div class="footer">Heuristic tool for research. Not definitive proof.</div>
       </div>
     </div>
   </div>
 
-<!-- external libs -->
+<!-- html2canvas and jsPDF -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <script>
-/*
-  AI/Human chunk detector (hover overlay, paragraph chunks)
-  - Attempts to load referenceLibrary.js (optional) to override calibration.
-  - Non-diluting scoring by chunk.
-  - Human-evidence negative signals included.
-  - Scholarly/Creative modes adjust weights subtly.
-  - Local log + optional backend POST with graceful fallback.
+/* Single-file AI vs Human Detector
+   - Tries to read window.REFERENCE_LIBRARY if you add a referenceLibrary.js in same folder (optional).
+   - If not present, uses embedded reference calibration.
+   - Dual rule sets: AI and Human. Each rule has patterns, base weight key matching REFERENCE.baseWeights keys.
+   - Scoring:
+       local = min(100, round((count / strongIf) * 30))
+       total = sum(local * effectiveWeight)
+     AI_likelihood = round(100 * AI_total / (AI_total + Human_total))
+   - Cluster amplification: if AI matches are dense (matches per 100 words high) AI_total is scaled up a bit.
+   - Highlights use underline+dashed style; hover shows details in inspector pane (no browser title tooltips).
 */
 
-// --- fallback reference (will be replaced if referenceLibrary.js present) ---
+// ---------- Embedded fallback reference ----------
 const FALLBACK_REFERENCE = {
   baseWeights: {
-    emDash: 1.8, promo: 1.5, symbolism: 1.4, weasel: 1.2, templating: 1.3,
-    disclaimer:1.0, genericSummary:1.0, phenomenon:1.1, weirdQuotes:0.5, longLists:0.8,
-    hedging:0.9, citationTokens:1.2, sectionCase:0.6, emphasisSignposting:1.0,
-    technicalPhrases:1.1, conjunctiveIng:0.7, overcitation:1.0, lists:0.6
+    emDash:1.9, promo:1.6, symbolism:1.5, weasel:1.3, templating:1.4,
+    disclaimer:1.1, genericSummary:1.0, phenomenon:1.2, weirdQuotes:0.5, longLists:0.8,
+    hedging:0.9, citationTokens:1.3, sectionCase:0.6, emphasisSignposting:1.0,
+    technicalPhrases:1.1, conjunctiveIng:0.8, overcitation:1.1, lists:0.6
   },
   stats: {
-    emDash: {aiAvg:5.8, humanAvg:1.3}, promo:{aiAvg:9.2, humanAvg:2.6},
-    symbolism:{aiAvg:4.0, humanAvg:1.6}, weasel:{aiAvg:3.6, humanAvg:1.5},
-    templating:{aiAvg:1.9, humanAvg:0.1}, disclaimer:{aiAvg:2.2, humanAvg:0.4},
-    genericSummary:{aiAvg:6.0, humanAvg:2.3}, phenomenon:{aiAvg:4.8, humanAvg:1.8},
-    weirdQuotes:{aiAvg:1.1, humanAvg:0.8}, longLists:{aiAvg:6.5, humanAvg:3.2},
-    hedging:{aiAvg:7.4, humanAvg:4.0}, citationTokens:{aiAvg:2.8, humanAvg:0.6},
-    sectionCase:{aiAvg:3.0, humanAvg:2.6}, emphasisSignposting:{aiAvg:5.5, humanAvg:2.0},
-    technicalPhrases:{aiAvg:4.2, humanAvg:3.1}, conjunctiveIng:{aiAvg:6.2, humanAvg:3.9},
-    overcitation:{aiAvg:3.2, humanAvg:1.7}, lists:{aiAvg:5.0, humanAvg:2.9}
-  },
-  // humanSignals reduce AI-likelihood; weights >0 mean stronger human evidence
-  humanSignals: {
-    specificDateRange: 3.0,
-    specificArtifactOrNamed: 2.5,
-    nonClicheInterpretation: 2.5,
-    comparativeCivilization: 3.0,
-    concreteConstraint: 2.0
+    emDash:{aiAvg:5.8,humanAvg:1.1}, promo:{aiAvg:9.2,humanAvg:2.4},
+    symbolism:{aiAvg:4.0,humanAvg:1.5}, weasel:{aiAvg:3.6,humanAvg:1.4},
+    templating:{aiAvg:1.9,humanAvg:0.1}, disclaimer:{aiAvg:2.2,humanAvg:0.4},
+    genericSummary:{aiAvg:6.0,humanAvg:2.3}, phenomenon:{aiAvg:4.8,humanAvg:1.8},
+    weirdQuotes:{aiAvg:1.1,humanAvg:0.8}, longLists:{aiAvg:6.5,humanAvg:3.2},
+    hedging:{aiAvg:7.4,humanAvg:4.0}, citationTokens:{aiAvg:2.8,humanAvg:0.6},
+    sectionCase:{aiAvg:3.0,humanAvg:2.6}, emphasisSignposting:{aiAvg:5.5,humanAvg:2.0},
+    technicalPhrases:{aiAvg:4.2,humanAvg:3.1}, conjunctiveIng:{aiAvg:6.2,humanAvg:3.9},
+    overcitation:{aiAvg:3.2,humanAvg:1.7}, lists:{aiAvg:5.0,humanAvg:2.9}
   }
 };
-let REFERENCE = window.REFERENCE_LIBRARY || FALLBACK_REFERENCE;
 
-// Try to load optional external referenceLibrary.js if it's present
-(function tryLoadReference(){
-  if(window.REFERENCE_LIBRARY){ REFERENCE = window.REFERENCE_LIBRARY; return; }
-  const s = document.createElement('script'); s.src='./referenceLibrary.js'; s.async=true;
-  s.onload = () => { if(window.REFERENCE_LIBRARY) REFERENCE = window.REFERENCE_LIBRARY; };
-  s.onerror = ()=>{/* silent fallback */};
-  document.head.appendChild(s);
-})();
+const REFERENCE = window.REFERENCE_LIBRARY || FALLBACK_REFERENCE;
 
-// --- RULES (patterns) ---
-const RULES = [
-  { id:'emDash', label:'Em-dash overuse', weightKey:'emDash', patterns:["—{1,}"], strongIf:1, description:"Frequent em dashes / clause-chaining." },
-  { id:'promo', label:'Promotional / grandeur', weightKey:'promo', patterns:["\\b(revolutionary|groundbreaking|stunning|rich tapestry|remarkable journeys?)\\b"], strongIf:1, description:"Hyperbolic or promotional adjectives." },
-  { id:'symbolism', label:'Symbolic phrasing', weightKey:'symbolism', patterns:["\\b(serves as a testament|stands as a testament|serves as a reminder)\\b"], strongIf:1, description:"Rhetorical symbolism." },
-  { id:'weasel', label:'Vague attributions', weightKey:'weasel', patterns:["\\b(experts say|studies suggest|research indicates|some critics argue)\\b"], strongIf:1, description:"Vague attribution without specifics." },
-  { id:'templating', label:'Template placeholders', weightKey:'templating', patterns:["\\[.*?\\]","\\{\\{.*?\\}\\}"], strongIf:1, description:"Leftover templates / tokens." },
-  { id:'disclaimer', label:'Model-style disclaimers', weightKey:'disclaimer', patterns:["as an AI language model","as a large language model","I\\'?m sorry,? I can\\'?t"], strongIf:1, description:"Model meta-statements." },
-  { id:'genericSummary', label:'Formulaic conclusions', weightKey:'genericSummary', patterns:["\\b(in conclusion|in summary|to summarize|ultimately)\\b"], strongIf:1, description:"Formulaic concluding phrasing." },
-  { id:'phenomenon', label:'Sweeping cause-effect', weightKey:'phenomenon', patterns:["\\b(is profoundly altering|is reshaping|is reshaping the availability)\\b"], strongIf:1, description:"Broad sweeping causal phrasing." },
-  { id:'weirdQuotes', label:'Curly/smart quotes', weightKey:'weirdQuotes', patterns:["[\\u201c\\u201d\\u2018\\u2019]"], strongIf:2, description:"Smart quotes or typographic artifacts." },
-  { id:'longLists', label:'Rule-of-three / triads', weightKey:'longLists', patterns:["\\b(\\w+[, ]+\\w+[, ]+and\\s+\\w+)\\b"], strongIf:3, description:"A, B, and C list patterns." },
-  { id:'hedging', label:'Hedging words', weightKey:'hedging', patterns:["\\b(may|might|could|likely|approximately|arguably)\\b"], strongIf:2, description:"Excessive hedging." },
-  { id:'citationTokens', label:'Citation-like tokens', weightKey:'citationTokens', patterns:["doi=10\\.","pmid=\\d{1,7}","access-date=\\d{4}-xx-xx"], strongIf:1, description:"Citation tokens or placeholders." },
-  { id:'sectionCase', label:'Title-case headings', weightKey:'sectionCase', patterns:["^\\s*[A-Z][a-z]+(?:\\s+[A-Z][a-z]+){1,5}\\s*$"], strongIf:3, description:"Likely autogenerated section headings." },
-  { id:'emphasisSignposting', label:'Signposting', weightKey:'emphasisSignposting', patterns:["\\b(it is important to note|it is crucial|it is worth noting)\\b"], strongIf:1, description:"Didactic signposting." },
-  { id:'technicalPhrases', label:'Scientific terms', weightKey:'technicalPhrases', patterns:["\\b(phenological mismatch|photoperiod|breeding grounds|migration timing|stopover points)\\b"], strongIf:1, description:"Scientific-looking terminology." },
-  { id:'conjunctiveIng', label:'-ing connectors', weightKey:'conjunctiveIng', patterns:["\\b(ensuring|highlighting|underscoring|contributing to|resulting in|leading to)\\b"], strongIf:2, description:"Frequent '-ing' connectors." },
-  { id:'overcitation', label:'Parenthetical specifics', weightKey:'overcitation', patterns:["\\(Ficedula hypoleuca\\)|\\(Tachycineta bicolor\\)|\\(Turdus migratorius\\)","\\b(e\\.g\\.|for example|such as the)\\b"], strongIf:1, description:"Precise parenthetical examples." },
-  { id:'lists', label:'Inline list headers', weightKey:'lists', patterns:["^\\s*\\d+\\.\\s+[^\\n]+:\\s","^\\s*\\-\\s+[^\\n]+:\\s","^\\s*•\\s+[^\\n]+:\\s"], strongIf:1, description:"List headers." }
-];
-// compile regexes
-RULES.forEach(r => r.re = r.patterns.map(p => { try { return new RegExp(p, 'gmi'); } catch(e){ return new RegExp(escapeRegExp(p), 'gmi'); }}));
-
-// --- human-evidence detectors (pattern-based) ---
-const HUMAN_PATTERNS = [
-  { id:'specificDateRange', label:'Specific date range', pattern:/\b\d{3,4}\s*(?:BCE|BC|CE|AD)?\s*(?:to|–|-)\s*\d{3,4}\s*(?:BCE|BC|CE|AD)?\b/i },
-  { id:'specificArtifactOrNamed', label:'Specific named artifact/person', pattern:/\b(Scarab|Scarab Amulet|Nile|Mandate of Heaven|pharaoh|Old Kingdom|Indus River Valley)\b/i },
-  { id:'nonClicheInterpretation', label:'Interpretive analysis', pattern:/\b(believed to|were believed to|interpreted as|symbol of|represented|associated with)\b/i },
-  { id:'comparativeCivilization', label:'Civilization comparison', pattern:/\b(similar to the|like the Mandate of Heaven|comparable to)\b/i },
-  { id:'concreteConstraint', label:'Concrete migration constraint', pattern:/\b(desert|river level|migration would be|too great a challenge|unable to do so)\b/i }
+// ---------- Rule sets ----------
+const RULES_AI = [
+  {id:'emDash', label:'Em-dash overuse', key:'emDash', patterns:["—{1,}"], strongIf:1, desc:"Frequent em dashes indicate clause chaining typical of many generated essays."},
+  {id:'promo', label:'Promotional language', key:'promo', patterns:["\\b(revolutionary|groundbreaking|stunning|thriving|boasts a|rich tapestry|remarkable journeys?)\\b","\\b(remarkable|extraordinary|unprecedented|profoundly)\\b"], strongIf:1, desc:"Generic hyperbole and grand adjectives."},
+  {id:'symbolism', label:'Symbolic phrasing', key:'symbolism', patterns:["\\b(serves as a testament|serves as a reminder|stands as a testament|stands as)\\b"], strongIf:1, desc:"Rhetorical symbolism and signposting."},
+  {id:'weasel', label:'Vague attributions', key:'weasel', patterns:["\\b(experts say|some critics argue|observers have noted|studies suggest|research indicates|it is argued)\\b"], strongIf:1, desc:"Attributions without specific sources."},
+  {id:'templating', label:'Template tokens', key:'templating', patterns:["\\[.*?\\]","\\{\\{.*?\\}\\}","Enter\\s+\\w+"], strongIf:1, desc:"Leftover template placeholders."},
+  {id:'genericSummary', label:'Formulaic summaries', key:'genericSummary', patterns:["\\b(in conclusion|in summary|to summarize|ultimately|what was once)\\b"], strongIf:1, desc:"Formulaic section endings."},
+  {id:'phenomenon', label:'Sweeping cause-effect phrases', key:'phenomenon', patterns:["\\b(is profoundly altering|is reshaping|is reshaping the availability|profoundly altering)\\b"], strongIf:1, desc:"Broad-scope causal language."},
+  {id:'longLists', label:'Rule-of-three triads', key:'longLists', patterns:["\\b(\\w+[, ]+\\w+[, ]+and\\s+\\w+)\\b"], strongIf:3, desc:"'A, B, and C' polished list constructions."},
+  {id:'citationTokens', label:'Citation-like tokens', key:'citationTokens', patterns:["doi=10\\.","pmid=\\d{1,7}","access-date=\\d{4}-xx-xx","2025-xx-xx"], strongIf:1, desc:"Placeholder or synthetic citation strings."},
+  {id:'technicalPhrases', label:'Scientific-sounding terms', key:'technicalPhrases', patterns:["\\b(phenological mismatch|photoperiod|breeding grounds|migration timing|stopover points)\\b"], strongIf:1, desc:"Domain terms used generically."},
+  {id:'conjunctiveIng', label:'-ing connectors', key:'conjunctiveIng', patterns:["\\b(ensuring|highlighting|underscoring|contributing to|resulting in|leading to)\\b"], strongIf:2, desc:"Frequent present-participle linking."}
 ];
 
-// UI refs
+const RULES_HUMAN = [
+  {id:'contractions', label:'Conversational contractions', key:'human1', patterns:["\\b(ain't|gonna|wanna|can't believe|don't think)\\b"], strongIf:1, desc:"Conversational contractions and colloquial speech."},
+  {id:'idiosyncratic', label:'Idiosyncratic phrasing / idioms', key:'human2', patterns:["\\b(you can tell|to be honest|the thing is|oddly enough|I remember when)\\b"], strongIf:1, desc:"Personal idioms and narrative cues."},
+  {id:'disfluency', label:'Disfluencies & fillers', key:'human3', patterns:["\\b(um,|uh,|well,|you know,|like,)\\b"], strongIf:1, desc:"Hesitations and filler words common in human writing."},
+  {id:'shortsent', label:'Short sentence fragments', key:'human4', patterns:["(^|[\\.\\?\\!]\\s+)[A-Z][a-z]{0,10}\\s+[a-z]+[\\.\\?\\!\\n]"], strongIf:2, desc:"Short fragment sentences and abrupt turns."},
+  {id:'punctuation_variance', label:'Punctuation variance', key:'human5', patterns:["[\\.]{3,}|\\;{1}|\\!{2,}"], strongIf:2, desc:"Ellipses, semicolons, repeated exclamation — varied punctuation."},
+  {id:'nometa', label:'Absence of meta-statements', key:'human6', patterns:["\\b(I|me|we|my|our)\\b"], strongIf:2, desc:"Personal pronouns used naturally (not always AI-like)."}
+];
+
+// compile regex
+RULES_AI.forEach(r => r.re = r.patterns.map(p => safeRe(p)));
+RULES_HUMAN.forEach(r => r.re = r.patterns.map(p => safeRe(p)));
+
+function safeRe(p){ try{return new RegExp(p,'gmi');}catch(e){ return new RegExp(escapeRegExp(p),'gmi'); } }
+function escapeRegExp(s){ return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+function escapeHtml(s){ if(!s) return ''; return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+
+// ---------- UI elements ----------
 const inputEl = document.getElementById('inputText');
 const analyzeBtn = document.getElementById('analyzeBtn');
 const clearBtn = document.getElementById('clearBtn');
@@ -245,258 +205,390 @@ const downloadLogBtn = document.getElementById('downloadLogBtn');
 const exportPdfBtn = document.getElementById('exportPdfBtn');
 const backendToggle = document.getElementById('backendToggle');
 const backendUrlInput = document.getElementById('backendUrl');
-const chunksContainer = document.getElementById('chunksContainer');
+
+const renderedText = document.getElementById('renderedText');
 const barsWrap = document.getElementById('barsWrap');
 const overallPctEl = document.getElementById('overallPct');
+const gaugeArc = document.getElementById('gaugeArc');
+const summaryHeadline = document.getElementById('summaryHeadline');
 const summaryText = document.getElementById('summaryText');
-const modeBtns = document.querySelectorAll('.mode-btn');
+const weightsList = document.getElementById('weightsList');
+const inspectorPane = document.getElementById('inspectorPane');
+const diagWrap = document.getElementById('diagWrap');
 
-const LOG_KEY = 'ai_detector_chunk_log_v1';
+analyzeBtn.addEventListener('click', analyze);
+clearBtn.addEventListener('click', ()=>{ inputEl.value=''; clearAll(); });
+downloadLogBtn.addEventListener('click', downloadLog);
+exportPdfBtn.addEventListener('click', exportPDF);
 
-// helpers
+// preload sample essay (your bird migration essay)
+inputEl.value = `The Impact of Climate Change on Bird Migration
+Introduction
+
+For centuries, the seasonal migrations of birds have fascinated naturalists and scientists alike. Each year, millions of birds embark on remarkable journeys that span continents and oceans, guided by an intricate interplay of instinct, environmental cues, and evolutionary adaptation. Migration serves as a crucial mechanism that allows birds to exploit varying ecological conditions—breeding in temperate regions during summer and retreating to warmer climates during winter. This ancient rhythm of movement has been finely balanced for millennia. However, in the modern age, this delicate equilibrium faces unprecedented disruption. Climate change—an all-encompassing transformation of global weather patterns driven largely by human activity—is profoundly altering the world’s ecosystems. Among its many consequences, the impact on avian migration stands out as both scientifically significant and ecologically alarming.
+
+As global temperatures rise, precipitation patterns shift, and ecosystems are restructured, migratory birds face increasing challenges in timing, navigation, and survival. Changes in climate are reshaping the availability of resources, altering migration routes, and disrupting the synchrony between birds and the seasonal cycles on which they depend. This essay explores the multifaceted impact of climate change on bird migration, focusing on alterations in migration timing, routes, breeding success, and overall population dynamics.
+
+Changing Environmental Cues
+
+Bird migration depends heavily on environmental cues such as temperature, photoperiod (day length), and food availability. These natural signals inform birds when to depart, which direction to travel, and when to return. Yet climate change is distorting these cues, making them increasingly unreliable.
+
+In many regions, spring temperatures are rising earlier than in previous decades. This causes some bird species to begin their migrations prematurely, arriving at breeding grounds before the peak abundance of food resources. In contrast, other species—whose migration timing is more strongly governed by photoperiod—may fail to adjust, arriving too late to take advantage of optimal conditions. This phenomenon, known as a phenological mismatch, can have serious consequences. For example, insectivorous birds such as the pied flycatcher (Ficedula hypoleuca) now often arrive in Europe after the peak of caterpillar abundance, leading to reduced breeding success and population declines.
+
+Furthermore, irregular weather patterns, such as prolonged droughts, heatwaves, and unseasonal storms, can interrupt migration routes. Wetland habitats that once provided critical stopover points for rest and feeding are drying up or shifting geographically. Without these essential refueling stations, many birds struggle to complete their migrations, resulting in increased mortality and weakened populations.
+
+Shifts in Migration Timing and Routes
+
+One of the most well-documented effects of climate change on bird migration is the alteration in migration timing. Long-term studies have shown that numerous species now migrate earlier in the spring and later in the autumn. In North America, for instance, species such as the tree swallow (Tachycineta bicolor) and the American robin (Turdus migratorius) are arriving on their breeding grounds several days or even weeks earlier than they did in the mid-20th century. Similarly, in Europe, the barn swallow (Hirundo rustica) has advanced its spring arrival by over a week in some regions.
+
+In addition to timing shifts, migration routes are also changing. As global temperatures rise, some species are extending their ranges northward into previously unsuitable territories. This expansion, while initially appearing adaptive, can expose birds to new ecological risks—such as unfamiliar predators, competitors, or inadequate nesting conditions. In Arctic and sub-Arctic regions, for example, melting ice and changing vegetation patterns have opened new areas for birds, but these zones are unstable and may not provide consistent resources in the long term.
+
+Moreover, climate-induced habitat loss in tropical and subtropical regions threatens the wintering grounds of countless migratory birds. The shrinking of wetlands in Africa’s Sahel or the deforestation of South American rainforests removes vital habitats, forcing birds to travel further or settle in less suitable areas. The cumulative strain of longer migrations, unpredictable weather, and dwindling resources poses an existential threat to many species.
+
+Ecosystem Mismatches and Breeding Success
+
+A critical consequence of disrupted migration patterns is the growing asynchrony between birds and their ecosystems. Birds have evolved to time their breeding cycles so that their chicks hatch when food is most abundant. However, climate change has altered the timing of insect emergence, plant flowering, and fruiting seasons, decoupling the relationship between birds and their food supply.
+
+For example, in northern Europe, warmer springs have led to earlier insect hatches, but many migratory birds arriving from Africa still follow traditional schedules. The result is that chicks are often raised during periods of food scarcity, leading to higher mortality rates and declining populations. This mismatch not only threatens individual species but can ripple through entire ecosystems. Birds play crucial roles as pollinators, seed dispersers, and pest controllers; thus, their decline can destabilize ecological networks and diminish biodiversity.
+
+In addition, altered climates can affect the breeding success of birds directly. Extreme weather events—such as heatwaves or heavy rainfall—can destroy nests, reduce the availability of nesting materials, and stress adult birds during crucial reproductive stages. High temperatures may also reduce egg viability or chick survival, further exacerbating population declines.
+
+Adaptive Responses and Conservation Challenges
+
+Despite these challenges, some species exhibit a degree of plasticity—the ability to adjust behaviorally or physiologically to changing conditions. Short-distance migrants, which rely more on local environmental cues than long-distance signals, have shown greater capacity to modify their migration schedules. However, long-distance migrants, such as those traveling between continents, are less able to adapt quickly because their movements are tightly controlled by innate genetic programs rather than flexible environmental feedback.
+
+Conservationists are increasingly emphasizing adaptive management strategies to mitigate these threats. Protecting and restoring critical habitats along migration routes, creating wildlife corridors, and monitoring population trends are essential steps. International cooperation is also vital, as migratory birds cross multiple political boundaries during their journeys. Agreements such as the Convention on the Conservation of Migratory Species of Wild Animals (CMS) and regional initiatives like Natura 2000 in Europe aim to provide a coordinated approach to safeguarding migratory species.
+
+Moreover, reducing greenhouse gas emissions remains the most fundamental solution. Unless the rate of climate change is slowed, even the most well-designed conservation measures may not suffice to preserve the complex migratory systems that birds depend upon.
+
+Conclusion
+
+The impact of climate change on bird migration is both profound and far-reaching. It affects not only when and where birds travel but also their survival, reproduction, and ecological roles within their environments. What was once a predictable and harmonious natural cycle is now increasingly erratic, reflecting the instability of the planet’s changing climate.
+
+Bird migration serves as a powerful indicator of environmental health. The disruptions observed among migratory species are not isolated events but symptoms of a broader ecological imbalance. The future of these birds—and the ecosystems they sustain—depends on humanity’s ability to address the root causes of climate change, to conserve vital habitats, and to foster resilience in natural systems.
+
+Ultimately, the story of migrating birds is also the story of the planet itself: interconnected, delicate, and vulnerable to our collective actions. Protecting these travelers of the sky is not merely an act of compassion—it is an imperative step toward preserving the balance of life on Earth.`;
+
+// ---------- helpers ----------
+function safeExecRegex(regex, text){
+  try{
+    regex.lastIndex = 0;
+    return regex.exec(text);
+  } catch(e){ return null; }
+}
+function countMatches(regex, text){
+  let c = 0, m;
+  try{
+    regex.lastIndex = 0;
+    while((m = regex.exec(text)) !== null){
+      c++; if(m.index === regex.lastIndex) regex.lastIndex++;
+    }
+  }catch(e){}
+  return c;
+}
 function escapeHtml(s){ if(!s) return ''; return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
 function escapeRegExp(s){ return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
-function getLocalLog(){ try{ const raw = localStorage.getItem(LOG_KEY); return raw ? JSON.parse(raw) : []; } catch(e){ return []; } }
-function appendLocalLog(entry){ try{ const arr = getLocalLog(); arr.push(entry); localStorage.setItem(LOG_KEY, JSON.stringify(arr)); } catch(e){ console.warn('save log failed', e); } }
-function downloadLog(){ const arr = getLocalLog(); const blob = new Blob([JSON.stringify(arr, null, 2)], {type:'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'ai_detector_chunk_log.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); }
 
-// effective weight with mode tweaks
-let CURRENT_MODE = 'default';
+// ---------- effective weight ----------
 function effectiveWeight(key){
-  const baseW = (REFERENCE.baseWeights && (REFERENCE.baseWeights[key] !== undefined)) ? REFERENCE.baseWeights[key] : 1.0;
-  const stat = (REFERENCE.stats && REFERENCE.stats[key]) ? REFERENCE.stats[key] : {aiAvg:1, humanAvg:1};
-  let eff = baseW * (stat.aiAvg / Math.max(1, stat.humanAvg));
-  // mode adjustments: scholarly reduces penalty for technical phrases (makes human signals stronger)
-  if(CURRENT_MODE === 'scholarly'){
-    if(key === 'technicalPhrases') eff *= 0.8;
-    if(key === 'emDash') eff *= 0.95;
-  } else if(CURRENT_MODE === 'creative'){
-    // creative mode: increase weight on promotional / stylistic cues
-    if(key === 'promo' || key === 'symbolism') eff *= 1.15;
-  }
-  return eff;
+  const base = REFERENCE.baseWeights && REFERENCE.baseWeights[key] ? REFERENCE.baseWeights[key] : 1.0;
+  const stat = REFERENCE.stats && REFERENCE.stats[key] ? REFERENCE.stats[key] : {aiAvg:1, humanAvg:1};
+  return base * (stat.aiAvg / Math.max(1, stat.humanAvg));
 }
 
-// analyze a single chunk (text)
-function analyzeChunk(text){
-  const result = {text, matches:[], counts:{}, localScores:{}, aiScore:0, humanScore:0};
-  // initialize counts
-  RULES.forEach(r=>result.counts[r.id]=0);
-  // find matches for each rule
-  RULES.forEach(r=>{
-    r.re.forEach(rx=>{
-      rx.lastIndex = 0;
-      let m;
-      while((m = rx.exec(text)) !== null){
-        result.counts[r.id] += 1;
-        result.matches.push({rule:r.id, text:m[0]});
-        if(m.index === rx.lastIndex) rx.lastIndex++;
-      }
-    });
-  });
-  // compute local s_i (0-100)
-  const triggered = [];
-  RULES.forEach(r=>{
-    const cnt = result.counts[r.id] || 0;
-    const local = Math.min(100, Math.round((cnt / (r.strongIf || 1)) * 25));
-    result.localScores[r.id] = local;
-    if(local>0) triggered.push({id:r.id,local, weightEff: effectiveWeight(r.weightKey)});
-  });
-  // AI score: weighted average across triggered rules only (non-diluting)
-  let wSum=0, ws=0;
-  triggered.forEach(t=>{ ws += t.local * t.weightEff; wSum += t.weightEff; });
-  result.aiScore = wSum ? Math.round(ws / wSum) : 0;
-  // compute humanScore based on human patterns presence
-  let humanRaw=0;
-  HUMAN_PATTERNS.forEach(h=>{
-    if(h.pattern.test(text)) humanRaw += (REFERENCE.humanSignals && REFERENCE.humanSignals[h.id]) ? REFERENCE.humanSignals[h.id] : 2.0;
-  });
-  // scale humanRaw into 0-100 (arbitrary mapping but consistent)
-  result.humanScore = Math.min(100, Math.round((humanRaw / 10) * 100));
-  // compute final combined "lean" for convenience: we will display both aiScore and humanScore separately
-  // collect top signals for display
-  const signalCounts = {};
-  result.matches.forEach(m=> signalCounts[m.rule] = (signalCounts[m.rule]||0)+1 );
-  result.topSignals = Object.entries(signalCounts).sort((a,b)=>b[1]-a[1]).slice(0,4).map(e=>({rule:e[0],count:e[1]}));
-  return result;
-}
-
-// chunk text into paragraphs (strip empties)
-function chunkTextIntoParagraphs(text){
-  // normalize newlines
-  const paras = text.split(/\n{1,}/).map(p=>p.trim()).filter(p=>p.length>0);
-  return paras;
-}
-
-// render chunks to DOM
-function renderChunks(results){
-  chunksContainer.innerHTML = '';
-  results.forEach((res, idx)=>{
-    const cont = document.createElement('div'); cont.className='chunk-container';
-    // label gap (the DOM element that will "move" above)
-    const labelGap = document.createElement('div'); labelGap.className='label-gap';
-    const labelAbove = document.createElement('div'); labelAbove.className='label-above';
-    const pill = document.createElement('span'); pill.className='label-pill';
-    // prepare colors
-    const isAI = res.aiScore > res.humanScore + 10; // AI-leaning
-    const isHuman = res.humanScore > res.aiScore + 10;
-    const ambig = !isAI && !isHuman;
-    // pill content: both scores
-    pill.innerHTML = `<span class="score" style="color:${isAI? 'var(--ai)': (isHuman? 'var(--human)': 'var(--amb)')}">
-                        AI ${res.aiScore}%</span>
-                      <span class="score" style="color:${isHuman? 'var(--human)':'var(--muted)'}">
-                        Human ${res.humanScore}%</span>
-                      <span class="signals">· ${res.topSignals.map(s=>escapeHtml(s.rule)).join(', ')}</span>`;
-    labelAbove.appendChild(pill);
-    // chunk element with main text
-    const chunkEl = document.createElement('div');
-    chunkEl.className = 'chunk ' + (isAI? 'ai-strong': (isHuman? 'human-strong':'ambig'));
-    chunkEl.innerHTML = escapeHtml(res.text);
-    // tooltip bubble
-    const tooltip = document.createElement('div'); tooltip.className='tooltip';
-    tooltip.innerHTML = `<div class="title">${isAI? 'AI-leaning chunk' : (isHuman? 'Human-leaning chunk' : 'Mixed / ambiguous chunk')}</div>
-      <div><strong>AI score:</strong> ${res.aiScore}% &nbsp; <strong>Human score:</strong> ${res.humanScore}%</div>
-      <div style="margin-top:8px" class="evidence"><strong>Top signals:</strong> ${res.topSignals.map(s=>escapeHtml(s.rule + (s.count>1? ' x'+s.count:''))).join(', ')}</div>`;
-    // append pieces
-    cont.appendChild(labelAbove);
-    cont.appendChild(tooltip);
-    cont.appendChild(chunkEl);
-    chunksContainer.appendChild(cont);
-
-    // hover handlers: make the line above move up to create a gap and show label
-    cont.addEventListener('mouseenter', ()=>{
-      // show label gap visually by moving this container down (so previous line appears to move up)
-      // We'll move the previous sibling up if exists
-      const prev = cont.previousElementSibling;
-      if(prev && prev.classList.contains('chunk-container')){
-        prev.style.transform = 'translateY(-28px)';
-      }
-      // also enlarge label gap (by setting height)
-      labelGap.style.height = '10px';
-      labelAbove.style.opacity = '1';
-      labelAbove.style.transform = 'translateY(0)';
-      tooltip.style.opacity = '1';
-      tooltip.style.transform = 'translateY(0)';
-    });
-    cont.addEventListener('mouseleave', ()=>{
-      const prev = cont.previousElementSibling;
-      if(prev && prev.classList.contains('chunk-container')) prev.style.transform = '';
-      labelGap.style.height = '0';
-      labelAbove.style.opacity = '0';
-      labelAbove.style.transform = 'translateY(-6px)';
-      tooltip.style.opacity = '0';
-      tooltip.style.transform = 'translateY(-6px)';
-    });
-  });
-}
-
-// aggregate summary (average AI across chunks that triggered) and bars
-function renderSummary(chunkResults){
-  // compute avg AI across chunks that had nonzero ai or human signals (we'll average aiScore)
-  const triggered = chunkResults.filter(c => c.aiScore>0 || c.humanScore>0);
-  const avgAI = triggered.length ? Math.round(triggered.reduce((s,c)=>s+c.aiScore,0)/triggered.length) : 0;
-  overallPctEl.textContent = avgAI + '%';
-  const dash = 290 - (290 * (avgAI/100));
-  const arc = document.getElementById('gaugeArc');
-  if(arc) arc.style.strokeDashoffset = dash;
-  summaryText.textContent = `Avg AI score across ${triggered.length} chunk(s).`;
-  // simple bars for top rules (global)
-  const globalCounts = {};
-  chunkResults.forEach(c=> c.topSignals.forEach(s=> globalCounts[s.rule] = (globalCounts[s.rule]||0)+s.count));
-  const entries = Object.entries(globalCounts).sort((a,b)=>b[1]-a[1]).slice(0,8);
-  barsWrap.innerHTML = entries.map(e=> {
-    const label = e[0], cnt=e[1], pct = Math.min(100, Math.round((cnt/5)*20));
-    return `<div class="bar"><div class="meta">${escapeHtml(label)}</div><div class="meter"><i style="width:${pct}%"></i></div><div class="score">${pct}%</div></div>`;
-  }).join('');
-}
-
-// main analyze flow
-function analyzeAll(){
+// ---------- analyze ----------
+function analyze(){
   const text = inputEl.value || '';
-  if(!text.trim()){ alert('Paste text first'); return; }
-  const paras = chunkTextIntoParagraphs(text);
-  const results = paras.map(p => analyzeChunk(p));
-  renderChunks(results);
-  renderSummary(results);
+  if(!text.trim()){ alert('Paste some text to analyze'); return; }
+
+  // find AI matches
+  const aiMatches = [];
+  const aiCounts = {};
+  RULES_AI.forEach(r => aiCounts[r.id]=0);
+  RULES_AI.forEach(r => {
+    r.re.forEach(rx => {
+      let m; rx.lastIndex = 0;
+      while((m = rx.exec(text)) !== null){
+        aiCounts[r.id]++; aiMatches.push({start:m.index,end:m.index+m[0].length,text:m[0],rule:r}); if(m.index === rx.lastIndex) rx.lastIndex++;
+      }
+    });
+  });
+
+  // find Human matches
+  const humanMatches = [];
+  const humanCounts = {};
+  RULES_HUMAN.forEach(r => humanCounts[r.id]=0);
+  RULES_HUMAN.forEach(r => {
+    r.re.forEach(rx => {
+      let m; rx.lastIndex = 0;
+      while((m = rx.exec(text)) !== null){
+        humanCounts[r.id]++; humanMatches.push({start:m.index,end:m.index+m[0].length,text:m[0],rule:r}); if(m.index === rx.lastIndex) rx.lastIndex++;
+      }
+    });
+  });
+
+  // compute local scores
+  const perAI = [];
+  RULES_AI.forEach(r => {
+    const cnt = aiCounts[r.id] || 0;
+    const local = Math.min(100, Math.round((cnt / (r.strongIf || 1)) * 30));
+    if(local > 0){
+      perAI.push({id:r.id,label:r.label,count:cnt,local,weightEff:effectiveWeight(r.key),desc:r.desc,rule:r});
+    }
+  });
+  const perHuman = [];
+  RULES_HUMAN.forEach(r => {
+    const cnt = humanCounts[r.id] || 0;
+    const local = Math.min(100, Math.round((cnt / (r.strongIf || 1)) * 30));
+    if(local > 0){
+      perHuman.push({id:r.id,label:r.label,count:cnt,local,weightEff: (r.key in REFERENCE.baseWeights ? effectiveWeight(r.key) : 1.0),desc:r.desc,rule:r});
+    }
+  });
+
+  // Weighted totals
+  let aiTotal = perAI.reduce((s,p)=> s + p.local * p.weightEff, 0);
+  let humanTotal = perHuman.reduce((s,p)=> s + p.local * p.weightEff, 0);
+
+  // cluster amplification for AI: matches per 100 words
+  const words = (text.trim().split(/\s+/).length || 1);
+  const aiDensity = aiMatches.length / (words / 100);
+  // amplify modestly: +0%..+40% (so large densities significantly boost AI_total)
+  const amp = Math.min(0.4, aiDensity * 0.04);
+  if(aiMatches.length > 0) aiTotal = Math.round(aiTotal * (1 + amp));
+
+  // compute normalized AI likelihood
+  const sum = aiTotal + humanTotal;
+  const aiLikelihood = sum > 0 ? Math.round(100 * (aiTotal / sum)) : 0;
+
+  // prepare highlights: combine all matches, avoid overlap by priority (AI first) then human
+  const combined = [];
+  aiMatches.forEach(m=> combined.push({...m,source:'AI'}));
+  humanMatches.forEach(m=> combined.push({...m,source:'Human'}));
+  combined.sort((a,b)=> a.start - b.start || b.end - a.end);
+
+  // remove overlaps: pick earlier + longer
+  const finalMatches = [];
+  let cursor = 0;
+  for(const m of combined){
+    if(m.end <= cursor) continue;
+    // if overlaps with last, skip if lower priority (we keep AI over Human when overlapping)
+    if(finalMatches.length){
+      const last = finalMatches[finalMatches.length-1];
+      if(m.start < last.end){
+        // overlap: decide priority: keep AI if any is AI and last is Human
+        if(last.source === 'Human' && m.source === 'AI'){
+          // replace last with m if m covers more
+          if(m.end >= last.end){ finalMatches[finalMatches.length-1] = m; cursor = m.end; continue; } else { continue; }
+        } else { continue; }
+      }
+    }
+    finalMatches.push(m); cursor = m.end;
+  }
+
+  // build highlighted HTML
+  let out = '', pos = 0;
+  for(const m of finalMatches){
+    out += escapeHtml(text.slice(pos, m.start));
+    // choose classes: ai/med/strong or human
+    let cls = 'match';
+    const cntForRule = (m.source === 'AI') ? aiCounts[m.rule.id] : humanCounts[m.rule.id];
+    const weightEff = (m.source==='AI') ? effectiveWeight(m.rule.key) : (m.rule.key in REFERENCE.baseWeights ? effectiveWeight(m.rule.key) : 1.0);
+    if(m.source === 'Human') cls += ' human';
+    else{
+      if(cntForRule >= (m.rule.strongIf || 1) * 3 || weightEff >= 1.6) cls += ' strong ai';
+      else if(cntForRule >= (m.rule.strongIf || 1) * 2 || weightEff >= 1.2) cls += ' med ai';
+      else cls += ' ai';
+    }
+    // create span with data-index so inspector can reference (no title attr)
+    const index = finalMatches.indexOf(m);
+    out += `<span class="${cls}" data-source="${m.source}" data-ruleid="${m.rule.id}" data-index="${index}">${escapeHtml(m.text)}</span>`;
+    pos = m.end;
+  }
+  out += escapeHtml(text.slice(pos));
+  renderedText.innerHTML = out || '(no matches)';
+
+  // attach hover / click handlers to spans (inspector shows details)
+  const spans = renderedText.querySelectorAll('span.match');
+  spans.forEach(s=>{
+    s.addEventListener('mouseenter', onSpanHover);
+    s.addEventListener('mouseleave', onSpanLeave);
+    s.addEventListener('click', onSpanClick);
+  });
+
+  // render bars (show both AI and Human top categories)
+  barsWrap.innerHTML = '';
+  // combine perAI and perHuman into display table sorted by contribution (local*weight)
+  const contributions = [];
+  perAI.forEach(p => contributions.push({type:'AI',score:p.local * p.weightEff, label:p.label, local:p.local, count:p.count}));
+  perHuman.forEach(p => contributions.push({type:'Human',score:p.local * p.weightEff, label:p.label, local:p.local, count:p.count}));
+  contributions.sort((a,b)=>b.score - a.score);
+  contributions.slice(0,12).forEach(c=>{
+    const div = document.createElement('div'); div.className='bar';
+    const pct = Math.min(100, Math.round(c.local));
+    div.innerHTML = `<div class="meta">${escapeHtml(c.label)} <span style="font-size:12px;color:${c.type==='AI'?'#c2410c':'#059669'}"> (${c.type})</span></div>
+      <div class="meter"><i style="width:${pct}%"></i></div>
+      <div class="score">${pct}%</div>`;
+    barsWrap.appendChild(div);
+  });
+
+  // update gauge & summary
+  overallPctEl.textContent = aiLikelihood + '%';
+  const dash = 290 - (290 * (aiLikelihood/100));
+  gaugeArc.style.strokeDashoffset = dash;
+  summaryHeadline.textContent = aiLikelihood >= 75 ? 'AI-leaning (strong)' : (aiLikelihood >= 45 ? 'Mixed (uncertain)' : 'Human-leaning');
+  summaryText.textContent = `AI ${aiTotal} vs Human ${humanTotal} — ${aiLikelihood}% AI likelihood (relative)`;
+
+  // weights list
+  weightsList.innerHTML = buildWeightsList();
+
+  // diagnostic cards
+  diagWrap.innerHTML = '';
+  // show AI high reliability cards for top AI matches first (emDash special styling)
+  perAI.slice(0,6).forEach(rp=>{
+    const el = document.createElement('div'); el.className = rp.id==='emDash' ? 'diag emdash' : 'diag ai';
+    el.innerHTML = `<div style="font-weight:700">${escapeHtml(rp.label)} — ${rp.local}% (${rp.count} matches)</div>
+                    <div class="small" style="margin-top:8px">${escapeHtml(rp.desc)}</div>
+                    <div class="small" style="margin-top:8px">Effective weight: ${rp.weightEff.toFixed(2)}</div>`;
+    diagWrap.appendChild(el);
+  });
+  perHuman.slice(0,6).forEach(rp=>{
+    const el = document.createElement('div'); el.className = 'diag human';
+    el.innerHTML = `<div style="font-weight:700">${escapeHtml(rp.label)} — ${rp.local}% (${rp.count} matches)</div>
+                    <div class="small" style="margin-top:8px">${escapeHtml(rp.desc)}</div>`;
+    diagWrap.appendChild(el);
+  });
 
   // store audit log entry
   const entry = {
-    ts: new Date().toISOString(),
-    mode: CURRENT_MODE,
-    results: results.map(r=>({ai:r.aiScore, human:r.humanScore, topSignals:r.topSignals.slice(0,3), snippet:r.text.slice(0,300)}))
+    timestamp: new Date().toISOString(),
+    aiLikelihood, aiTotal, humanTotal,
+    perAI: perAI.map(p=>({id:p.id,label:p.label,local:p.local,count:p.count,weightEff:p.weightEff})),
+    perHuman: perHuman.map(p=>({id:p.id,label:p.label,local:p.local,count:p.count,weightEff:p.weightEff})),
+    snippet: text.slice(0,2000)
   };
   appendLocalLog(entry);
 
-  // backend post if consented (graceful fallback)
+  // optional backend post
   if(backendToggle.checked){
-    const url = (backendUrlInput.value || '').trim();
-    if(!url){ alert('Please enter a backend URL'); return; }
-    if(!confirm('Send the analysis to backend? You consent to POST the anonymized entry.')) return;
-    fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(entry)})
-      .then(resp => {
-        if(!resp.ok) throw new Error('Server: '+resp.status);
-        alert('Saved to backend successfully.');
-      })
-      .catch(err => {
-        console.warn('backend save failed', err);
-        alert('Could not send to server; analysis stored locally instead.');
-      });
+    const url = backendUrlInput.value && backendUrlInput.value.trim();
+    if(url){
+      if(confirm('Send this analysis to the configured backend endpoint?')){
+        fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(entry)})
+          .then(res=> res.ok ? alert('Saved to backend.') : alert('Server returned ' + res.status))
+          .catch(err=> alert('Failed to post to backend: ' + (err && err.message ? err.message : err)));
+      }
+    } else alert('Please set a backend URL if you want to send analyses.');
   }
+
+  // helper: inspector initial info
+  inspectorPane.innerHTML = `<div class="small">Found ${aiMatches.length} AI-like matches and ${humanMatches.length} human-like matches. Hover a highlighted fragment to see details here.</div>`;
 }
 
-// export PDF: renders the visible annotated chunks into a clean report popup and saves
+// ---------- inspector interactions ----------
+let pinned = null;
+
+function onSpanHover(e){
+  const s = e.currentTarget;
+  if(pinned) return;
+  showInspectorForSpan(s);
+}
+function onSpanLeave(e){
+  if(pinned) return;
+  inspectorPane.innerHTML = `<div class="small">Hover a highlighted fragment to see details here. Click to pin.</div>`;
+}
+function onSpanClick(e){
+  const s = e.currentTarget;
+  if(pinned === s){ pinned = null; inspectorPane.innerHTML = `<div class="small">Inspector unpinned. Hover to inspect other fragments.</div>`; return; }
+  pinned = s;
+  showInspectorForSpan(s);
+}
+
+function showInspectorForSpan(span){
+  const ruleId = span.getAttribute('data-ruleid');
+  const source = span.getAttribute('data-source');
+  const text = span.textContent;
+  // find rule metadata
+  let rule = null;
+  if(source === 'AI') rule = RULES_AI.find(r=>r.id === ruleId);
+  else rule = RULES_HUMAN.find(r=>r.id === ruleId);
+  const label = rule ? rule.label : ruleId;
+  const desc = rule ? rule.desc : 'Matched pattern';
+  const sourceColor = source==='AI' ? '#c2410c' : '#059669';
+  // strength heuristics (based on class)
+  const cls = span.className;
+  const strength = cls.includes('strong') ? 'High' : cls.includes('med') ? 'Medium' : 'Low';
+  inspectorPane.innerHTML = `
+    <div style="padding:8px;border-radius:8px;background:#fff" class="rule-row">
+      <div style="font-weight:700">${escapeHtml(label)} <span style="color:${sourceColor};font-weight:700">(${escapeHtml(source)})</span></div>
+      <div class="meta-row"><strong>Matched text:</strong> <span style="color:#0b1220">${escapeHtml(text)}</span></div>
+      <div class="meta-row"><strong>Interpretation:</strong> ${escapeHtml(desc)}</div>
+      <div class="meta-row"><strong>Strength:</strong> ${strength}</div>
+      <div class="meta-row" style="margin-top:6px"><button id="insCopyBtn" class="secondary">Copy match</button></div>
+    </div>
+  `;
+  const copyBtn = inspectorPane.querySelector('#insCopyBtn');
+  if(copyBtn) copyBtn.addEventListener('click', ()=> {
+    navigator.clipboard && navigator.clipboard.writeText(text).then(()=> alert('Copied match to clipboard.'));
+  });
+}
+
+// ---------- local log ----------
+const LOG_KEY = 'ai_detector_log_v2';
+function getLocalLog(){ try{ return JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); }catch(e){return [];} }
+function appendLocalLog(entry){ const arr = getLocalLog(); arr.push(entry); try{ localStorage.setItem(LOG_KEY, JSON.stringify(arr)); }catch(e){console.warn('could not save log',e);} }
+function downloadLog(){ const arr = getLocalLog(); const blob = new Blob([JSON.stringify(arr, null, 2)], {type:'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download='ai_detector_log.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); }
+function clearAll(){ renderedText.innerHTML=''; barsWrap.innerHTML=''; overallPctEl.textContent='0%'; gaugeArc.style.strokeDashoffset=290; summaryHeadline.textContent='No analysis yet'; summaryText.textContent=''; inspectorPane.innerHTML=''; diagWrap.innerHTML=''; weightsList.innerHTML = buildWeightsList(); }
+
+// ---------- build weights list ----------
+function buildWeightsList(){
+  let html = '<div><strong>Calibrated effective weights</strong></div><div style="font-size:13px;margin-top:8px">';
+  const keys = Object.keys(REFERENCE.baseWeights || {});
+  keys.forEach(k=>{
+    const base = REFERENCE.baseWeights[k] || 1.0;
+    const stat = REFERENCE.stats && REFERENCE.stats[k] ? REFERENCE.stats[k] : {aiAvg:1,humanAvg:1};
+    const eff = Math.round(base * (stat.aiAvg / Math.max(1,stat.humanAvg)) * 100)/100;
+    html += `<div style="margin-bottom:6px"><strong>${escapeHtml(k)}</strong> base ${base} → effective ${eff}</div>`;
+  });
+  html += '</div>';
+  return html;
+}
+weightsList.innerHTML = buildWeightsList();
+
+// ---------- PDF export ----------
 async function exportPDF(){
-  // build a minimal report HTML with annotated chunks
-  const parasHtml = Array.from(document.querySelectorAll('.chunk-container')).map(cont=>{
-    const pill = cont.querySelector('.label-pill') ? cont.querySelector('.label-pill').outerHTML : '';
-    const chunkHtml = cont.querySelector('.chunk') ? cont.querySelector('.chunk').innerHTML : '';
-    const tooltipText = cont.querySelector('.tooltip') ? cont.querySelector('.tooltip').innerHTML : '';
-    return `<div style="margin-bottom:14px">${pill}<div style="padding:10px;border-radius:6px;background:#fff;margin-top:6px">${chunkHtml}</div><div style="color:#6b7280;font-size:12px;margin-top:6px">${tooltipText}</div></div>`;
-  }).join('');
-  const report = `<div style="font-family:Arial,Helvetica,sans-serif;padding:24px;color:#0b1220">
-      <h1>AI/Human chunk analysis</h1>
-      <div style="margin-bottom:8px">Generated: ${new Date().toISOString()}</div>
-      ${parasHtml}
-      <div style="margin-top:20px;color:#6b7280;font-size:12px">Heuristics only — not proof of authorship.</div>
-    </div>`;
-  const popup = window.open('', '_blank', 'width=900,height=1000');
-  if(!popup){ alert('Popup blocked; allow popups to export PDF.'); return; }
-  popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Report</title></head><body style="margin:0;padding:0;background:#f6f8fb">${report}</body></html>`);
-  await new Promise(res => setTimeout(res, 400));
+  const title = 'ai_detector_report';
+  const overall = overallPctEl.textContent || '0%';
+  const headline = summaryHeadline.textContent || '';
+  const reportHtml = `
+    <div style="font-family:Arial,Helvetica,sans-serif;padding:24px;color:#101828">
+      <h1>AI-detection report</h1>
+      <div style="margin-bottom:8px"><strong>Overall AI likelihood:</strong> ${escapeHtml(overall)} — ${escapeHtml(headline)}</div>
+      <div style="margin-bottom:8px"><strong>Scoring:</strong> AI_likelihood = AI_total / (AI_total + Human_total). Only triggered categories are used.</div>
+      <h3>Inspector & Diagnostics</h3>
+      <div>${document.getElementById('inspectorPane').innerHTML}</div>
+      <h3 style="margin-top:12px">Highlighted text</h3>
+      <div style="padding:12px;border:1px solid #eef2f6;border-radius:8px;background:#fff;white-space:pre-wrap">${renderedText.innerHTML}</div>
+      <div style="margin-top:18px;color:#6b7280;font-size:12px">Heuristic tool — not definitive proof.</div>
+    </div>
+  `;
+  const popup = window.open('','_blank','width=800,height=1000');
+  if(!popup){ alert('Popup blocked. Allow popups to export PDF.'); return; }
+  popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Report</title></head><body style="margin:0;padding:0;background:#f6f7fb">${reportHtml}</body></html>`);
+  await new Promise(r=>setTimeout(r,350));
   try{
     const canvas = await html2canvas(popup.document.body, {scale:1.4, backgroundColor:null, useCORS:true});
-    const img = canvas.toDataURL('image/jpeg', 0.94);
+    const imgData = canvas.toDataURL('image/jpeg', 0.94);
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ unit:'px', format:[canvas.width, canvas.height] });
-    pdf.addImage(img, 'JPEG', 0, 0, canvas.width, canvas.height);
-    pdf.save('ai_chunk_report.pdf');
-  } catch(e){
-    alert('Export failed: '+ (e && e.message ? e.message : e));
-  } finally {
-    setTimeout(()=> popup.close(), 900);
-  }
+    pdf.addImage(imgData, 'JPEG', 0, 0, canvas.width, canvas.height);
+    pdf.save(title + '.pdf');
+  }catch(err){ alert('Export failed: ' + (err && err.message ? err.message : err)); }
+  finally{ setTimeout(()=> popup.close(),900); }
 }
 
-// UI wiring
-analyzeBtn.addEventListener('click', analyzeAll);
-clearBtn.addEventListener('click', ()=>{ inputEl.value=''; chunksContainer.innerHTML=''; barsWrap.innerHTML=''; overallPctEl.textContent='0%'; summaryText.textContent='No analysis yet.'; });
-downloadLogBtn.addEventListener('click', downloadLog);
-exportPdfBtn.addEventListener('click', exportPDF);
-modeBtns.forEach(btn=>{
-  btn.addEventListener('click', ()=>{
-    modeBtns.forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-    CURRENT_MODE = btn.dataset.mode;
-  });
-});
-
-// preload sample essay if page loaded blank
-if(!inputEl.value.trim()){
-  inputEl.value = `The Impact of Climate Change on Bird Migration
-Introduction
-
-For centuries, the seasonal migrations of birds have fascinated naturalists and scientists alike. Each year, millions of birds embark on remarkable journeys that span continents and oceans, guided by an intricate interplay of instinct, environmental cues, and evolutionary adaptation. Migration serves as a crucial mechanism that allows birds to exploit varying ecological conditions—breeding in temperate regions during summer and retreating to warmer climates during winter. This ancient rhythm of movement has been finely balanced for millennia. However, in the modern age, this delicate equilibrium faces unprecedented disruption. Climate change—an all-encompassing transformation of global weather patterns driven largely by human activity—is profoundly altering the world’s ecosystems. Among its many consequences, the impact on avian migration stands out as both scientifically significant and ecologically alarming.`;
-}
+// initialize
+weightsList.innerHTML = buildWeightsList();
+inspectorPane.innerHTML = `<div class="small">Hover highlighted fragments to inspect matches here. Click to pin.</div>`;
 
 </script>
 </body>
