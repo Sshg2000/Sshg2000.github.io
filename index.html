@@ -174,7 +174,7 @@ const RULES_AI = [
   {id:'templating', label:'Template tokens', key:'templating', patterns:["\\[.*?\\]","\\{\\{.*?\\}\\}","Enter\\s+\\w+"], strongIf:1, desc:"Leftover template placeholders."},
   {id:'genericSummary', label:'Formulaic summaries', key:'genericSummary', patterns:["\\b(in conclusion|in summary|to summarize|ultimately|what was once)\\b"], strongIf:1, desc:"Formulaic section endings."},
   {id:'phenomenon', label:'Sweeping cause-effect phrases', key:'phenomenon', patterns:["\\b(is profoundly altering|is reshaping|is reshaping the availability|profoundly altering)\\b"], strongIf:1, desc:"Broad-scope causal language."},
-  {id:'longLists', label:'Rule-of-three triads', key:'longLists', patterns:["\\b(\\w+[, ]+\\w+[, ]+and\\s+\\w+)\\b"], strongIf:3, desc:"'A, B, and C' polished list constructions."},
+  {id:'longLists', label:'Rule-of-three triads', key:'longLists', patterns:["\\b(\\w+\\s*,\\s*\\w+\\s*,\\s*and\\s*\\w+)\\b"], strongIf:3, desc:"'A, B, and C' polished list constructions."},
   {id:'citationTokens', label:'Citation-like tokens', key:'citationTokens', patterns:["doi=10\\.","pmid=\\d{1,7}","access-date=\\d{4}-xx-xx","2025-xx-xx"], strongIf:1, desc:"Placeholder or synthetic citation strings."},
   {id:'technicalPhrases', label:'Scientific-sounding terms', key:'technicalPhrases', patterns:["\\b(phenological mismatch|photoperiod|breeding grounds|migration timing|stopover points)\\b"], strongIf:1, desc:"Domain terms used generically."},
   {id:'conjunctiveIng', label:'-ing connectors', key:'conjunctiveIng', patterns:["\\b(ensuring|highlighting|underscoring|contributing to|resulting in|leading to)\\b"], strongIf:2, desc:"Frequent present-participle linking."}
