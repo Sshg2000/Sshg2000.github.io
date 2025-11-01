@@ -357,7 +357,7 @@ function analyze(){
   if(aiMatches.length > 0) aiTotal = Math.round(aiTotal * (1 + amp));
 
   // compute normalized AI likelihood (human weighted x2)
-  const sum = aiTotal + (3 * humanTotal);
+  const sum = aiTotal + (5 * humanTotal);
   const aiLikelihood = sum > 0 ? Math.round(100 * (aiTotal / sum)) : 0;
 
   // prepare highlights: combine all matches, avoid overlap by priority (AI first) then human
