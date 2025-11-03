@@ -171,7 +171,19 @@ const RULES_AI = [
   {id:'promo', label:'Promotional language', key:'promo', patterns:["\\b(revolutionary|groundbreaking|stunning|thriving|boasts a|rich tapestry|remarkable journeys?)\\b","\\b(remarkable|extraordinary|unprecedented|profoundly)\\b"], strongIf:1, desc:"Generic hyperbole and grand adjectives."},
   {id:'symbolism', label:'Symbolic phrasing', key:'symbolism', patterns:["\\b(serves as a testament|serves as a reminder|stands as a testament|stands as)\\b"], strongIf:1, desc:"Rhetorical symbolism and signposting."},
   {id:'weasel', label:'Vague attributions', key:'weasel', patterns:["\\b(experts say|some critics argue|observers have noted|studies suggest|research indicates|it is argued)\\b"], strongIf:1, desc:"Attributions without specific sources."},
-  {id:'templating', label:'Template tokens', key:'templating', patterns:["\\[.*?\\]","\\{\\{.*?\\}\\}","Enter\\s+\\w+"], strongIf:1, desc:"Leftover template placeholders."},
+  {
+  id:'templating',
+  label:'Template tokens',
+  key:'templating',
+  // only catch full placeholders like [NAME], [INSERT], not [ed]
+  patterns:[
+    "\\[\\s*(insert|name|title|summary|description|text|here|INPUT|TODO|TBD|REPLACE)[^\\]]*\\]",
+    "\\{\\{.*?\\}\\}",
+    "Enter\\s+\\w+"
+  ],
+  strongIf:1,
+  desc:"Leftover template placeholders (not literary editorial brackets)."
+},
   {id:'genericSummary', label:'Formulaic summaries', key:'genericSummary', patterns:["\\b(in conclusion|in summary|to summarize|ultimately|what was once)\\b"], strongIf:1, desc:"Formulaic section endings."},
   {id:'phenomenon', label:'Sweeping cause-effect phrases', key:'phenomenon', patterns:["\\b(is profoundly altering|is reshaping|is reshaping the availability|profoundly altering)\\b"], strongIf:1, desc:"Broad-scope causal language."},
   {id:'longLists', label:'Rule-of-three triads', key:'longLists', patterns:["\\b(\\w+\\s*,\\s*\\w+\\s*,\\s*and\\s*\\w+)\\b"], strongIf:3, desc:"'A, B, and C' polished list constructions."},
@@ -187,6 +199,8 @@ const RULES_HUMAN = [
   {id:'shortsent', label:'Short sentence fragments', key:'human4', patterns:["(^|[\\.\\?\\!]\\s+)[A-Z][a-z]{0,10}\\s+[a-z]+[\\.\\?\\!\\n]"], strongIf:2, desc:"Short fragment sentences and abrupt turns."},
   {id:'punctuation_variance', label:'Punctuation variance', key:'human5', patterns:["[\\.]{3,}|\\;{1}|\\!{2,}"], strongIf:2, desc:"Ellipses, semicolons, repeated exclamation — varied punctuation."},
   {id:'nometa', label:'Absence of meta-statements', key:'human6', patterns:["\\b(I|me|we|my|our)\\b"], strongIf:2, desc:"Personal pronouns used naturally (not always AI-like)."}
+  {id:'editorialBrackets', label:'Editorial bracket edits', key:'human6', patterns:["\\w+\\[[a-z]{1,4}\\]"], strongIf:1, desc:"Bracketed edits inside words (literary notation)." },
+
 ];
 
 // compile regex
